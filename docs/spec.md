@@ -2,7 +2,7 @@
 
 ## Objective
 
-WhatsChanged is a read-only native macOS app for viewing side-by-side code diffs across git branches, worktrees, and remotes in a single repository. It solves the problem of keeping track of what AI coding agents (and humans) have changed across many branches and worktrees, without switching contexts in the terminal or running `git diff` twenty times.
+WhatsChanged is a read-only native macOS app for viewing side-by-side code diffs across git branches, worktrees, remotes, and GitHub pull requests (including from forks) in a single repository. It solves the problem of keeping track of what AI coding agents (and humans) have changed across many branches and worktrees, without switching contexts in the terminal or running `git diff` twenty times.
 
 ## Users
 
