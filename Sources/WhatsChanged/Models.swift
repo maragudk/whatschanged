@@ -10,6 +10,7 @@ struct GitRef: Identifiable, Hashable, Sendable {
         case local
         case remote
         case worktree
+        case pullRequest
     }
 
     var displayName: String {
@@ -20,6 +21,12 @@ struct GitRef: Identifiable, Hashable, Sendable {
             return name
         case .worktree:
             return "\(name) (worktree)"
+        case .pullRequest:
+            // name is "refs/pull/311/head", extract the number.
+            let number = name
+                .replacingOccurrences(of: "refs/pull/", with: "")
+                .replacingOccurrences(of: "/head", with: "")
+            return "PR #\(number)"
         }
     }
 }

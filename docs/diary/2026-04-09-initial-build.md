@@ -115,3 +115,110 @@ The pipe deadlock was non-obvious from the symptoms (spinner forever). It only m
 ### Future work
 - Consider cancelling in-flight diff tasks when the selection changes.
 - The activation policy fix works but the app currently has no icon -- it shows the default SwiftUI app icon in the dock.
+
+## Step 4: Add PR ref support from forks
+
+### Prompt Context
+
+**Verbatim prompt:** Can it show branches from forks? E.g. this PR in gomponents: https://github.com/maragudk/gomponents/pull/311
+**Interpretation:** The user wants to see diffs from pull requests made by external contributors from forks.
+**Inferred intent:** Fork branches don't appear as remotes in the local repo. PRs are the main way the user would encounter fork code, so the app should surface them.
+
+### What I did
+Added PR ref fetching to `/Sources/WhatsChanged/GitService.swift`. The `getPullRequestRefs()` method runs `git fetch origin '+refs/pull/*/head:refs/pull/*/head'` to download all PR head refs from the remote, then lists them with `git for-each-ref`. Added a `.pullRequest` case to `GitRef.RefType` in `/Sources/WhatsChanged/Models.swift` with display names like `PR #311`. The fetch is best-effort -- errors are silently ignored so the app still works on repos without a remote or non-GitHub remotes.
+
+### Why
+GitHub exposes every PR as a fetchable ref at `refs/pull/NUMBER/head`, even from forks. This avoids the need to add fork remotes manually.
+
+### What worked
+Clean approach: one fetch command grabs all PR refs, no per-PR logic needed. Display as `PR #311` is immediately recognizable.
+
+### What didn't work
+Everything went smoothly on the implementation side.
+
+### What I learned
+GitHub stores PR refs at `refs/pull/*/head` (and `refs/pull/*/merge` for the merge commit). These are fetchable from the origin remote without adding the fork as a separate remote.
+
+### What was tricky
+Nothing significant. The main design choice was whether to fetch all PRs upfront vs. on demand. Fetching all is simpler and the overhead is acceptable for typical repos.
+
+### What warrants review
+- Fetching all PR refs on every refresh could be slow on repos with hundreds of PRs. May need pagination or caching later.
+- The fetch modifies the local repo (creates refs under `refs/pull/`). This is standard Git behavior but worth noting for a "read-only" app -- it doesn't modify the working tree or any branches.
+
+### Future work
+- Show PR title alongside the number (would require GitHub API calls).
+- Consider only fetching open PRs.
+
+## Step 5: Replace auto-refresh with manual refresh button
+
+### Prompt Context
+
+**Verbatim prompt:** Instead of updating on window focus, add a refresh button or something. It's slow every time I switch to it.
+**Interpretation:** The automatic ref refresh on window focus is too slow because it fetches PR refs from the remote.
+**Inferred intent:** User wants control over when the (slow) remote fetch happens.
+
+### What I did
+Removed the `NSApplication.didBecomeActiveNotification` observer from `/Sources/WhatsChanged/ContentView.swift`. Added a refresh button (circular arrow icon) in the toolbar, bound to Cmd+R.
+
+### Why
+The PR ref fetch hits the network on every refresh, making the auto-refresh-on-focus noticeably slow. A manual button gives the user control.
+
+### What worked
+Simple, clean fix. One notification listener removed, one button added.
+
+### What didn't work
+Everything went smoothly.
+
+### What I learned
+Network-dependent operations should not be tied to window focus events. The user switches windows frequently and doesn't want to wait each time.
+
+### What was tricky
+Nothing.
+
+### What warrants review
+Nothing -- straightforward change.
+
+### Future work
+- Could separate local ref refresh (fast, could stay automatic) from remote PR fetch (slow, manual only).
+
+## Step 6: Fix CLI argument parsing
+
+### Prompt Context
+
+**Verbatim prompt:** swift run WhatsChanged ../gomponents doesn't work for some reason. Picking in the file picker does.
+**Interpretation:** Relative paths passed as CLI arguments aren't resolving correctly.
+**Inferred intent:** The user wants `swift run WhatsChanged ../gomponents` to just work.
+
+### What I did
+Two issues fixed in `/Sources/WhatsChanged/AppModel.swift`:
+
+1. **Path resolution:** Replaced manual string concatenation (`cwd + "/" + path`) with `URL(fileURLWithPath:relativeTo:).standardizedFileURL` which properly resolves `..` components.
+
+2. **Argument parsing:** `swift run WhatsChanged -- ../gomponents` was passing `--` as `args[1]`. Changed arg parsing from `args[1]` to `args.first(where: { $0 != "--" && !$0.hasPrefix("-") })` to skip flags and separators.
+
+Also fixed stderr capture in `/Sources/WhatsChanged/GitService.swift` -- git errors were showing as blank because stderr was being piped to a `Pipe()` that was never read. Now stderr is read and included in the error message.
+
+Added a `/Makefile` with `make run path=../gomponents`.
+
+### Why
+The string-based path concatenation didn't resolve `..` properly, producing paths like `/Users/.../whatschanged/../gomponents` which may or may not work depending on the consumer. And `swift run` injects `--` into the argument list, which the naive `args[1]` parser picked up as the path.
+
+### What worked
+`URL.standardizedFileURL` handles all path normalization correctly. The arg filtering is simple and robust.
+
+### What didn't work
+The first fix (URL-based path resolution alone) wasn't enough -- the `--` argument issue was a separate bug that only became visible from the screenshot showing `/Users/markus/Developer/whatschanged/--` as the repo path and `git exited with status 128:` as a blank error. The blank error led to also fixing stderr capture.
+
+### What I learned
+- `swift run` passes `--` through to the binary as an argument. The `--` separator tells `swift run` to stop parsing its own flags, but the separator itself ends up in the binary's `CommandLine.arguments`.
+- Always capture and display stderr from subprocesses. Silent failures are debugging nightmares.
+
+### What was tricky
+Debugging remotely without being able to run the app directly. The screenshot was critical -- seeing `/whatschanged/--` in the path label immediately revealed the `--` parsing bug, and the blank error message revealed the missing stderr capture.
+
+### What warrants review
+The arg parser is simple but doesn't handle edge cases like `swift run WhatsChanged -- --some-future-flag ../gomponents`. Good enough for now.
+
+### Future work
+- Could use Swift ArgumentParser for proper CLI arg handling if more flags are needed later.

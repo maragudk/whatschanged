@@ -37,9 +37,6 @@ struct ContentView: View {
             .onAppear {
                 model.loadRefs()
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                model.loadRefs()
-            }
         } else {
             welcomeView
         }
@@ -65,6 +62,15 @@ struct ContentView: View {
             )
 
             Spacer()
+
+            Button {
+                model.loadRefs()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.borderless)
+            .help("Refresh refs")
+            .keyboardShortcut("r", modifiers: .command)
 
             if let repoPath = model.repoPath {
                 Text(repoPath)

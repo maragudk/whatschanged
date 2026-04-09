@@ -13,14 +13,11 @@ final class AppModel {
     var error: String?
 
     init() {
-        // Check CLI arguments for a repo path.
-        let args = CommandLine.arguments
-        if args.count > 1 {
-            let path = args[1]
-            let resolved = path.hasPrefix("/")
-                ? path
-                : FileManager.default.currentDirectoryPath + "/" + path
-            repoPath = resolved
+        // Check CLI arguments for a repo path. Skip flags and "--".
+        let args = CommandLine.arguments.dropFirst()
+        if let path = args.first(where: { $0 != "--" && !$0.hasPrefix("-") }) {
+            let url = URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+            repoPath = url.standardizedFileURL.path(percentEncoded: false)
         }
     }
 

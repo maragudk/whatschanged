@@ -53,6 +53,33 @@ struct GitService: Sendable {
             }
         }
 
+        // Pull request refs (fetched from remote, best-effort).
+        let prRefs = (try? getPullRequestRefs()) ?? []
+        refs.append(contentsOf: prRefs)
+
+        return refs
+    }
+
+    /// Fetch PR refs from origin and return them as GitRefs.
+    func getPullRequestRefs() throws -> [GitRef] {
+        // Fetch all PR head refs from origin into local refs.
+        _ = try? runGit(["fetch", "origin", "+refs/pull/*/head:refs/pull/*/head", "--quiet"])
+
+        // List the fetched PR refs.
+        let output = try runGit(["for-each-ref", "--format=%(refname)", "refs/pull/"])
+        var refs: [GitRef] = []
+        for line in output.components(separatedBy: "\n") {
+            let refname = line.trimmingCharacters(in: .whitespaces)
+            // Refs look like "refs/pull/311/head".
+            guard refname.hasPrefix("refs/pull/") && refname.hasSuffix("/head") else {
+                continue
+            }
+            refs.append(GitRef(
+                name: refname,
+                type: .pullRequest,
+                worktreePath: nil
+            ))
+        }
         return refs
     }
 
@@ -78,8 +105,9 @@ struct GitService: Sendable {
         process.environment = ProcessInfo.processInfo.environment
 
         let pipe = Pipe()
+        let stderrPipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = stderrPipe
 
         try process.run()
 
@@ -92,7 +120,9 @@ struct GitService: Sendable {
         }
 
         if process.terminationStatus != 0 {
-            throw GitError.commandFailed(status: process.terminationStatus, output: output)
+            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+            throw GitError.commandFailed(status: process.terminationStatus, output: stderr.isEmpty ? output : stderr)
         }
 
         return output
