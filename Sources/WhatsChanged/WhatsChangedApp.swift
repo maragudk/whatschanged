@@ -1,15 +1,46 @@
 import SwiftUI
+import AppKit
 
 @main
 struct WhatsChangedApp: App {
     @State private var model = AppModel()
+
+    init() {
+        NSApplication.shared.setActivationPolicy(.regular)
+
+        // Render an app icon: SF Symbol on a rounded-rect background.
+        let size: CGFloat = 512
+        let icon = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
+            // Background rounded rect.
+            let radius = size * 0.22
+            let path = NSBezierPath(roundedRect: rect.insetBy(dx: 4, dy: 4), xRadius: radius, yRadius: radius)
+            NSColor(red: 0.95, green: 0.3, blue: 0.5, alpha: 1.0).setFill()
+            path.fill()
+
+            // Draw SF Symbol centered in white.
+            let config = NSImage.SymbolConfiguration(pointSize: size * 0.45, weight: .medium)
+                .applying(.init(paletteColors: [.white]))
+            if let symbol = NSImage(systemSymbolName: "arrow.triangle.branch", accessibilityDescription: nil),
+               let configured = symbol.withSymbolConfiguration(config) {
+                let symbolSize = configured.size
+                let drawRect = NSRect(
+                    x: (size - symbolSize.width) / 2,
+                    y: (size - symbolSize.height) / 2,
+                    width: symbolSize.width,
+                    height: symbolSize.height
+                )
+                configured.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+            }
+            return true
+        }
+        NSApplication.shared.applicationIconImage = icon
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(model)
                 .onAppear {
-                    NSApplication.shared.setActivationPolicy(.regular)
                     NSApplication.shared.activate()
                 }
         }
