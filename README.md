@@ -1,5 +1,7 @@
 # WhatsChanged
 
+<img src="logo.png" alt="Logo" width="300" align="right">
+
 A read-only macOS app for viewing side-by-side code diffs across git branches, worktrees, remotes, and GitHub PRs.
 
 Built for developers who use AI coding agents that create branches and worktrees autonomously, and need a quick way to see what changed where.
