@@ -222,3 +222,65 @@ The arg parser is simple but doesn't handle edge cases like `swift run WhatsChan
 
 ### Future work
 - Could use Swift ArgumentParser for proper CLI arg handling if more flags are needed later.
+
+## Step 7: UI polish round
+
+### Prompt Context
+
+**Verbatim prompt:** (Series of UI feedback: app icon, menu commands, layout, ref sorting, commit subjects, hunk headers, divider)
+**Interpretation:** Multiple rounds of visual and UX polish based on real usage.
+**Inferred intent:** Make the app feel like a proper Mac app, not a prototype.
+
+### What I did
+A batch of UI/UX improvements across several files:
+
+1. **App icon** (`/Sources/WhatsChanged/WhatsChangedApp.swift`): Rendered a programmatic icon -- white `arrow.triangle.branch` SF Symbol on a pink rounded-rect background, 512x512. Set via `NSApplication.shared.applicationIconImage` since SPM builds produce a bare binary, not a `.app` bundle with an asset catalog.
+
+2. **Menu commands** (`/Sources/WhatsChanged/WhatsChangedApp.swift`, `/Sources/WhatsChanged/ContentView.swift`): Added Cmd+O to open a repo (works from anywhere via `CommandGroup`), Cmd+R to refresh refs, Cmd+K to open base ref picker, Cmd+L to open compare ref picker. The picker shortcuts use `FocusedValue` bindings to bridge from the menu command to the popover state in ContentView. Removed the visible refresh button from the toolbar.
+
+3. **Layout fix** (`/Sources/WhatsChanged/ContentView.swift`): The toolbar was floating to the vertical center because the content area wasn't claiming remaining space. Wrapped the content in a `Group` with `.frame(maxWidth: .infinity, maxHeight: .infinity)` so it fills below the toolbar.
+
+4. **Navigation title** (`/Sources/WhatsChanged/ContentView.swift`): Added `.navigationTitle()` with the repo directory name. Removed the full path text from the toolbar.
+
+5. **Default base ref** (`/Sources/WhatsChanged/AppModel.swift`, `/Sources/WhatsChanged/ContentView.swift`): Left picker placeholder shows the primary branch name ("main" or "master") immediately instead of "Base ref..." while loading.
+
+6. **Removed spinner**: Replaced the loading `ProgressView` with the "Select a branch to compare" placeholder for better perceived performance.
+
+7. **Arrow key navigation** (`/Sources/WhatsChanged/RefPickerView.swift`): Added Up/Down arrow keys to move through the ref list, Enter to select, Escape to close. Highlight follows selection and auto-scrolls via `ScrollViewReader`.
+
+8. **Date-sorted refs** (`/Sources/WhatsChanged/GitService.swift`, `/Sources/WhatsChanged/Models.swift`): Switched from separate `git branch` / `git branch -r` calls to a single `git for-each-ref --sort=-committerdate` that covers `refs/heads/`, `refs/remotes/`, and `refs/pull/` in one pass. Added `date` and `commitSubject` fields to `GitRef`. PR refs now sort alongside everything else by date.
+
+9. **Commit subjects in picker** (`/Sources/WhatsChanged/RefPickerView.swift`): Replaced the type label (local/remote/pullRequest) with the first line of the commit message, shown in caption-sized gray text.
+
+10. **Removed hunk headers** (`/Sources/WhatsChanged/DiffView.swift`): Dropped the `@@ -0,0 +1,98 @@` lines between hunks -- they're noise for this use case.
+
+11. **Continuous center divider** (`/Sources/WhatsChanged/DiffView.swift`): Replaced per-row divider `Rectangle` with a single `.overlay` on the `LazyVStack`. The line now runs unbroken through file headers and between sections.
+
+12. **NSTableView warning fix** (`/Sources/WhatsChanged/RefPickerView.swift`): Replaced `List` with `ScrollView` + `LazyVStack` in the ref picker popover to avoid AppKit's reentrant delegate warning.
+
+### Why
+Each change addressed friction observed during real usage on the gomponents repo. The goal was to go from "working prototype" to "app I'd actually use daily".
+
+### What worked
+The incremental approach -- one fix at a time, rebuild, test -- caught issues early. The `FocusedValue` pattern for menu shortcuts is clean and scales well. The single `for-each-ref` call simplified the code while adding date sorting.
+
+### What didn't work
+- First attempt at the app icon just set the symbol directly without a background -- looked weird in the dock/task switcher. Needed a drawn background.
+- `onKeyPress` doesn't support modifier keys directly (tried `.onKeyPress("l", modifiers: .command)`), so Cmd+K/L had to go through the menu command system with `FocusedValue`.
+- `frame(width: 1, maxHeight: .infinity)` on the per-row divider didn't help because the gap was between file sections, not within rows. The overlay approach was the right fix.
+
+### What I learned
+- SPM SwiftUI executables produce bare binaries, not `.app` bundles. No `Info.plist`, no asset catalog. Programmatic icon via `NSApplication.shared.applicationIconImage` is the workaround.
+- `FocusedValue` / `FocusedSceneValue` is the SwiftUI way to communicate from menu commands to views. It's a bit ceremony-heavy (define a key, an extension, bindings on both sides) but works reliably.
+- `git for-each-ref` with `%(subject)` gives the first line of the commit message -- perfect for one-line summaries in a picker.
+
+### What was tricky
+The center divider was the trickiest visually. Per-row dividers leave gaps at file boundaries. The overlay approach works because the `LazyVStack` has `spacing: 0`, so the overlay stretches the full content height without gaps.
+
+### What warrants review
+- The programmatic icon rendering uses `NSImage(size:flipped:drawingHandler:)` with `NSBezierPath` and `NSImage.SymbolConfiguration(paletteColors:)`. Worth verifying it looks correct on Retina displays.
+- The `FocusedValue` bindings for Cmd+K/L -- if the popover doesn't open, check that the scene value is being published correctly.
+
+### Future work
+- The commit subject can contain tabs which would break the `for-each-ref` parsing since we split on tabs. Edge case, but possible.
+- Might want to show relative dates (e.g. "2h ago") alongside commit subjects in the picker.

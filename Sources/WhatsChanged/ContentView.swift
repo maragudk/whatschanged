@@ -1,8 +1,29 @@
 import SwiftUI
 import AppKit
 
+struct OpenBasePickerKey: FocusedValueKey {
+    typealias Value = Binding<Bool>
+}
+
+struct OpenComparePickerKey: FocusedValueKey {
+    typealias Value = Binding<Bool>
+}
+
+extension FocusedValues {
+    var openBasePicker: Binding<Bool>? {
+        get { self[OpenBasePickerKey.self] }
+        set { self[OpenBasePickerKey.self] = newValue }
+    }
+    var openComparePicker: Binding<Bool>? {
+        get { self[OpenComparePickerKey.self] }
+        set { self[OpenComparePickerKey.self] = newValue }
+    }
+}
+
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @State private var basePickerOpen = false
+    @State private var comparePickerOpen = false
 
     var body: some View {
         @Bindable var model = model
@@ -15,28 +36,31 @@ struct ContentView: View {
                 Divider()
 
                 // Diff content.
-                if model.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let error = model.error {
-                    ContentUnavailableView(
-                        "Error",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text(error)
-                    )
-                } else if model.compareRef == nil {
-                    ContentUnavailableView(
-                        "Select a branch to compare",
-                        systemImage: "arrow.triangle.branch",
-                        description: Text("Pick a ref on the right to see changes.")
-                    )
-                } else {
-                    DiffView(fileDiffs: model.fileDiffs)
+                Group {
+                    if let error = model.error {
+                        ContentUnavailableView(
+                            "Error",
+                            systemImage: "exclamationmark.triangle",
+                            description: Text(error)
+                        )
+                    } else if model.compareRef == nil {
+                        ContentUnavailableView(
+                            "Select a branch to compare",
+                            systemImage: "arrow.triangle.branch",
+                            description: Text("Pick a ref on the right to see changes.")
+                        )
+                    } else {
+                        DiffView(fileDiffs: model.fileDiffs)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .onAppear {
                 model.loadRefs()
             }
+            .focusedSceneValue(\.openBasePicker, $basePickerOpen)
+            .focusedSceneValue(\.openComparePicker, $comparePickerOpen)
+            .navigationTitle(URL(fileURLWithPath: model.repoPath!).lastPathComponent)
         } else {
             welcomeView
         }
@@ -47,9 +71,10 @@ struct ContentView: View {
             @Bindable var model = model
 
             RefPickerView(
-                title: "Base ref...",
+                title: model.primaryBranchName,
                 refs: model.refs,
-                selection: $model.baseRef
+                selection: $model.baseRef,
+                isPresented: $basePickerOpen
             )
 
             Image(systemName: "arrow.right")
@@ -58,27 +83,11 @@ struct ContentView: View {
             RefPickerView(
                 title: "Compare ref...",
                 refs: model.refs,
-                selection: $model.compareRef
+                selection: $model.compareRef,
+                isPresented: $comparePickerOpen
             )
 
             Spacer()
-
-            Button {
-                model.loadRefs()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.borderless)
-            .help("Refresh refs")
-            .keyboardShortcut("r", modifiers: .command)
-
-            if let repoPath = model.repoPath {
-                Text(repoPath)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -106,6 +115,7 @@ struct ContentView: View {
                 openRepo()
             }
             .buttonStyle(.borderedProminent)
+            .keyboardShortcut("o", modifiers: .command)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

@@ -17,6 +17,12 @@ struct DiffView: View {
                         FileSection(file: file)
                     }
                 }
+                .overlay(alignment: .center) {
+                    Rectangle()
+                        .fill(.quaternary)
+                        .frame(width: 1)
+                        .frame(maxHeight: .infinity)
+                }
             }
         }
     }
@@ -71,15 +77,6 @@ private struct HunkView: View {
     var body: some View {
         let rows = DiffParser.sideBySideRows(for: hunk)
 
-        // Hunk header.
-        Text(hunk.header)
-            .font(.system(.caption, design: .monospaced))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.5))
-
         ForEach(rows) { row in
             SideBySideRowView(row: row)
         }
@@ -96,11 +93,6 @@ private struct SideBySideRowView: View {
         HStack(spacing: 0) {
             // Left side.
             lineSide(row.left, isDeletion: true)
-
-            // Divider.
-            Rectangle()
-                .fill(.quaternary)
-                .frame(width: 1)
 
             // Right side.
             lineSide(row.right, isDeletion: false)

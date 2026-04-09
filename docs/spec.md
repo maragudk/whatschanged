@@ -12,14 +12,16 @@ A single user type: a developer who uses AI coding agents that create branches a
 
 ### Repository access
 
-- Open a repository via command-line argument (`whatschanged /path/to/repo`) or a folder picker in the app.
+- Open a repository via command-line argument (`whatschanged /path/to/repo`), Cmd+O, or a folder picker on the welcome screen.
 - The app resolves worktree paths back to the main repository automatically.
+- Window title shows the repository directory name.
 
 ### Ref selection
 
-- Two dropdown selects at the top of the window: base ref (left) and compare ref (right).
-- Dropdowns list all local branches, remote-tracking branches, and worktree-associated branches (labeled as such).
-- Typing while a dropdown is open filters the list by substring match.
+- Two dropdown selects at the top of the window: base ref (left) and compare ref (right). Keyboard shortcuts: Cmd+K for base, Cmd+L for compare.
+- Dropdowns list all local branches, remote-tracking branches, worktree-associated branches, and GitHub pull request refs -- all sorted by commit date, newest first.
+- Each ref shows its name and the first line of its latest commit message.
+- Typing while a dropdown is open filters the list by substring match. Arrow keys navigate, Enter selects, Escape closes.
 - Base ref defaults to the repository's primary branch (main or master).
 
 ### Diff view
@@ -29,11 +31,12 @@ A single user type: a developer who uses AI coding agents that create branches a
 - Left column shows the base version, right column shows the compare version.
 - Changed lines are highlighted with diff coloring: green for additions, red for deletions, yellow for modifications.
 - Line numbers displayed on both sides.
+- A continuous vertical divider separates the two columns.
 - Binary files show a "binary file changed" message instead of a diff.
 
 ### Freshness
 
-- The ref list refreshes automatically when the app window regains focus, picking up new branches created by agents in the background.
+- The ref list refreshes on demand via Cmd+R. This also fetches the latest pull request refs from the remote.
 
 ## Non-goals
 

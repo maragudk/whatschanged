@@ -4,6 +4,8 @@ import AppKit
 @main
 struct WhatsChangedApp: App {
     @State private var model = AppModel()
+    @FocusedValue(\.openBasePicker) private var openBasePicker
+    @FocusedValue(\.openComparePicker) private var openComparePicker
 
     init() {
         NSApplication.shared.setActivationPolicy(.regular)
@@ -45,5 +47,36 @@ struct WhatsChangedApp: App {
                 }
         }
         .defaultSize(width: 1200, height: 800)
+        .commands {
+            CommandGroup(after: .newItem) {
+                Button("Open Repository...") {
+                    let panel = NSOpenPanel()
+                    panel.canChooseFiles = false
+                    panel.canChooseDirectories = true
+                    panel.allowsMultipleSelection = false
+                    panel.message = "Select a git repository"
+
+                    if panel.runModal() == .OK, let url = panel.url {
+                        model.openRepo(at: url)
+                    }
+                }
+                .keyboardShortcut("o", modifiers: .command)
+
+                Button("Refresh") {
+                    model.loadRefs()
+                }
+                .keyboardShortcut("r", modifiers: .command)
+
+                Button("Select Base Ref") {
+                    openBasePicker?.wrappedValue = true
+                }
+                .keyboardShortcut("k", modifiers: .command)
+
+                Button("Select Compare Ref") {
+                    openComparePicker?.wrappedValue = true
+                }
+                .keyboardShortcut("l", modifiers: .command)
+            }
+        }
     }
 }

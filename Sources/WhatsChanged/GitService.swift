@@ -11,6 +11,7 @@ struct GitService: Sendable {
     func getRefs() throws -> [GitRef] {
         var refs: [GitRef] = []
         var worktreeBranches: Set<String> = []
+        let repoRoot = try findRepoRoot()
 
         // Get worktrees first to know which branches are checked out as worktrees.
         let worktreeOutput = try runGit(["worktree", "list", "--porcelain"])
@@ -20,66 +21,57 @@ struct GitService: Sendable {
                 currentWorktreePath = String(line.dropFirst("worktree ".count))
             } else if line.hasPrefix("branch refs/heads/") {
                 let branch = String(line.dropFirst("branch refs/heads/".count))
-                if let path = currentWorktreePath {
-                    // Skip the main worktree (the repo root itself).
-                    let repoRoot = try findRepoRoot()
-                    if path != repoRoot {
-                        worktreeBranches.insert(branch)
-                        refs.append(GitRef(
-                            name: branch,
-                            type: .worktree,
-                            worktreePath: path
-                        ))
-                    }
+                if let path = currentWorktreePath, path != repoRoot {
+                    worktreeBranches.insert(branch)
                 }
             }
         }
 
-        // Local branches (skip those already listed as worktrees).
-        let localOutput = try runGit(["branch", "--format=%(refname:short)"])
-        for line in localOutput.components(separatedBy: "\n") {
-            let name = line.trimmingCharacters(in: .whitespaces)
-            if !name.isEmpty && !worktreeBranches.contains(name) {
-                refs.append(GitRef(name: name, type: .local, worktreePath: nil))
-            }
-        }
-
-        // Remote branches.
-        let remoteOutput = try runGit(["branch", "-r", "--format=%(refname:short)"])
-        for line in remoteOutput.components(separatedBy: "\n") {
-            let name = line.trimmingCharacters(in: .whitespaces)
-            if !name.isEmpty && !name.contains("/HEAD") {
-                refs.append(GitRef(name: name, type: .remote, worktreePath: nil))
-            }
-        }
-
-        // Pull request refs (fetched from remote, best-effort).
-        let prRefs = (try? getPullRequestRefs()) ?? []
-        refs.append(contentsOf: prRefs)
-
-        return refs
-    }
-
-    /// Fetch PR refs from origin and return them as GitRefs.
-    func getPullRequestRefs() throws -> [GitRef] {
-        // Fetch all PR head refs from origin into local refs.
+        // Fetch PR refs from origin (best-effort) before listing everything.
         _ = try? runGit(["fetch", "origin", "+refs/pull/*/head:refs/pull/*/head", "--quiet"])
 
-        // List the fetched PR refs.
-        let output = try runGit(["for-each-ref", "--format=%(refname)", "refs/pull/"])
-        var refs: [GitRef] = []
+        // All refs sorted by committer date (newest first).
+        let format = "%(refname:short)\t%(refname)\t%(committerdate:unix)\t%(subject)"
+        let output = try runGit([
+            "for-each-ref",
+            "--sort=-committerdate",
+            "--format=\(format)",
+            "refs/heads/",
+            "refs/remotes/",
+            "refs/pull/",
+        ])
+
         for line in output.components(separatedBy: "\n") {
-            let refname = line.trimmingCharacters(in: .whitespaces)
-            // Refs look like "refs/pull/311/head".
-            guard refname.hasPrefix("refs/pull/") && refname.hasSuffix("/head") else {
-                continue
+            let parts = line.split(separator: "\t", maxSplits: 3)
+            guard parts.count >= 2 else { continue }
+            let shortName = String(parts[0])
+            let fullRef = String(parts[1])
+            let date = parts.count > 2 ? Date(timeIntervalSince1970: Double(parts[2]) ?? 0) : nil
+            let subject = parts.count > 3 ? String(parts[3]) : nil
+
+            if fullRef.hasPrefix("refs/pull/") {
+                guard fullRef.hasSuffix("/head") else { continue }
+                refs.append(GitRef(name: fullRef, type: .pullRequest, worktreePath: nil, date: date, commitSubject: subject))
+            } else if fullRef.hasPrefix("refs/remotes/") {
+                if shortName.contains("/HEAD") { continue }
+                refs.append(GitRef(name: shortName, type: .remote, worktreePath: nil, date: date, commitSubject: subject))
+            } else if worktreeBranches.contains(shortName) {
+                // Look up the worktree path for this branch.
+                var wtPath: String?
+                var currentPath: String?
+                for wtLine in worktreeOutput.components(separatedBy: "\n") {
+                    if wtLine.hasPrefix("worktree ") {
+                        currentPath = String(wtLine.dropFirst("worktree ".count))
+                    } else if wtLine == "branch refs/heads/\(shortName)" {
+                        wtPath = currentPath
+                    }
+                }
+                refs.append(GitRef(name: shortName, type: .worktree, worktreePath: wtPath, date: date, commitSubject: subject))
+            } else {
+                refs.append(GitRef(name: shortName, type: .local, worktreePath: nil, date: date, commitSubject: subject))
             }
-            refs.append(GitRef(
-                name: refname,
-                type: .pullRequest,
-                worktreePath: nil
-            ))
         }
+
         return refs
     }
 

@@ -11,6 +11,7 @@ final class AppModel {
     var fileDiffs: [FileDiff] = []
     var isLoading = false
     var error: String?
+    var primaryBranchName = "main"
 
     init() {
         // Check CLI arguments for a repo path. Skip flags and "--".
@@ -34,6 +35,7 @@ final class AppModel {
                 let primary = try git.primaryBranch()
                 await MainActor.run {
                     self.refs = refs
+                    self.primaryBranchName = primary
                     if self.baseRef == nil {
                         self.baseRef = refs.first { $0.name == primary }
                     }

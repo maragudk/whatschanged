@@ -5,6 +5,8 @@ struct GitRef: Identifiable, Hashable, Sendable {
     let name: String
     let type: RefType
     let worktreePath: String?
+    let date: Date?
+    let commitSubject: String?
 
     enum RefType: String, Sendable {
         case local
