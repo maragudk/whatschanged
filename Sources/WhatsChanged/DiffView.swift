@@ -112,16 +112,16 @@ private struct SideBySideRowView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Left side.
-            lineSide(row.left, isDeletion: true)
+            lineSide(row.left, isLeft: true)
 
             // Right side.
-            lineSide(row.right, isDeletion: false)
+            lineSide(row.right, isLeft: false)
         }
         .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
-    private func lineSide(_ side: SideBySideRow.Side?, isDeletion: Bool) -> some View {
+    private func lineSide(_ side: SideBySideRow.Side?, isLeft: Bool) -> some View {
         HStack(spacing: 0) {
             // Line number.
             if let side {
@@ -136,14 +136,61 @@ private struct SideBySideRowView: View {
             }
 
             // Content.
-            Text(side?.content ?? "")
+            inlineDiffText(side, isLeft: isLeft)
                 .font(Self.monoFont)
-                .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 1)
         }
         .padding(.horizontal, 4)
         .background(backgroundColor(for: side?.type))
+    }
+
+    private func inlineDiffText(_ side: SideBySideRow.Side?, isLeft: Bool) -> Text {
+        guard let side, side.type == .modified,
+              let left = row.left, let right = row.right else {
+            return Text(side?.content ?? "")
+        }
+
+        let content = isLeft ? left.content : right.content
+        let other = isLeft ? right.content : left.content
+        let (prefix, changed, suffix) = diffSegments(content, other)
+        let highlight: Color = isLeft ? .red.opacity(0.25) : .green.opacity(0.25)
+
+        var highlightedPrefix = AttributedString(prefix)
+        highlightedPrefix.backgroundColor = nil
+        var highlightedChanged = AttributedString(changed)
+        highlightedChanged.backgroundColor = highlight
+        var highlightedSuffix = AttributedString(suffix)
+        highlightedSuffix.backgroundColor = nil
+
+        return Text(highlightedPrefix + highlightedChanged + highlightedSuffix)
+    }
+
+    /// Find the common prefix and suffix between two strings, returning
+    /// (prefix, changed middle, suffix) for the first string.
+    private func diffSegments(_ a: String, _ b: String) -> (String, String, String) {
+        let aChars = Array(a)
+        let bChars = Array(b)
+
+        // Common prefix length.
+        var prefixLen = 0
+        while prefixLen < aChars.count && prefixLen < bChars.count
+                && aChars[prefixLen] == bChars[prefixLen] {
+            prefixLen += 1
+        }
+
+        // Common suffix length (not overlapping with prefix).
+        var suffixLen = 0
+        while suffixLen < (aChars.count - prefixLen) && suffixLen < (bChars.count - prefixLen)
+                && aChars[aChars.count - 1 - suffixLen] == bChars[bChars.count - 1 - suffixLen] {
+            suffixLen += 1
+        }
+
+        let prefix = String(aChars[..<prefixLen])
+        let suffix = String(aChars[(aChars.count - suffixLen)...])
+        let changed = String(aChars[prefixLen..<(aChars.count - suffixLen)])
+
+        return (prefix, changed, suffix)
     }
 
     private func backgroundColor(for type: SideBySideRow.SideType?) -> Color {
