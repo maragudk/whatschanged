@@ -5,7 +5,7 @@ run:
 .PHONY: install
 install:
 	mkdir -p ~/.local/bin
-	printf '#!/bin/sh\nswift run --package-path %s WhatsChanged -- "$$@" &\n' "$(CURDIR)" > ~/.local/bin/whatschanged
+	printf '#!/bin/sh\nswift run --package-path %s WhatsChanged -- "$$@" > /dev/null 2>&1 &\n' "$(CURDIR)" > ~/.local/bin/whatschanged
 	chmod +x ~/.local/bin/whatschanged
 
 .PHONY: release
