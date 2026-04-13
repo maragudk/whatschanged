@@ -30,42 +30,62 @@ struct DiffView: View {
 
 private struct FileSection: View {
     let file: FileDiff
+    @State private var isCollapsed = false
 
     var body: some View {
         // File header.
-        HStack {
-            Text(file.displayPath)
-                .font(.system(.body, design: .monospaced, weight: .semibold))
-                .lineLimit(1)
-            Spacer()
-            if file.isBinary {
-                Text("binary")
+        Button {
+            isCollapsed.toggle()
+        } label: {
+            HStack {
+                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else {
-                HStack(spacing: 8) {
-                    Text("+\(file.additions)")
-                        .foregroundStyle(.green)
-                    Text("-\(file.deletions)")
-                        .foregroundStyle(.red)
+                    .frame(width: 12)
+                Text(file.displayPath)
+                    .font(.system(.body, design: .monospaced, weight: .semibold))
+                    .lineLimit(1)
+                Spacer()
+                if file.isBinary {
+                    Text("binary")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    HStack(spacing: 8) {
+                        Text("+\(file.additions)")
+                            .foregroundStyle(.green)
+                        Text("-\(file.deletions)")
+                            .foregroundStyle(.red)
+                    }
+                    .font(.system(.caption, design: .monospaced))
                 }
-                .font(.system(.caption, design: .monospaced))
             }
         }
+        .buttonStyle(.plain)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.bar)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
 
         Divider()
 
-        if file.isBinary {
-            Text("Binary file changed")
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .padding(12)
-        } else {
-            ForEach(file.hunks) { hunk in
-                HunkView(hunk: hunk)
+        if !isCollapsed {
+            if file.isBinary {
+                Text("Binary file changed")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(12)
+            } else {
+                ForEach(file.hunks) { hunk in
+                    HunkView(hunk: hunk)
+                }
             }
         }
     }
