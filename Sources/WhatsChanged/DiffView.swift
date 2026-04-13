@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DiffView: View {
     let fileDiffs: [FileDiff]
+    @State private var collapsedFiles: Set<String> = []
 
     var body: some View {
         if fileDiffs.isEmpty {
@@ -14,7 +15,7 @@ struct DiffView: View {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(fileDiffs) { file in
-                        FileSection(file: file)
+                        FileSection(file: file, collapsedFiles: $collapsedFiles)
                     }
                 }
                 .overlay(alignment: .center) {
@@ -30,12 +31,20 @@ struct DiffView: View {
 
 private struct FileSection: View {
     let file: FileDiff
-    @State private var isCollapsed = false
+    @Binding var collapsedFiles: Set<String>
+
+    private var isCollapsed: Bool {
+        collapsedFiles.contains(file.displayPath)
+    }
 
     var body: some View {
         // File header.
         Button {
-            isCollapsed.toggle()
+            if isCollapsed {
+                collapsedFiles.remove(file.displayPath)
+            } else {
+                collapsedFiles.insert(file.displayPath)
+            }
         } label: {
             HStack {
                 Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
@@ -66,13 +75,7 @@ private struct FileSection: View {
         .padding(.vertical, 8)
         .background(.bar)
         .contentShape(Rectangle())
-        .onHover { hovering in
-            if hovering {
-                NSCursor.pointingHand.push()
-            } else {
-                NSCursor.pop()
-            }
-        }
+        .pointerStyle(.link)
 
         Divider()
 
