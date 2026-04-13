@@ -157,7 +157,7 @@ private struct SideBySideRowView: View {
         let content = isLeft ? left.content : right.content
         let other = isLeft ? right.content : left.content
         let (prefix, changed, suffix) = diffSegments(content, other)
-        let highlight: Color = isLeft ? .red.opacity(0.25) : .green.opacity(0.25)
+        let highlight: Color = isLeft ? .red.opacity(0.35) : .green.opacity(0.35)
 
         var highlightedPrefix = AttributedString(prefix)
         highlightedPrefix.backgroundColor = nil
@@ -199,11 +199,11 @@ private struct SideBySideRowView: View {
     private func backgroundColor(for type: SideBySideRow.SideType?) -> Color {
         switch type {
         case .addition:
-            return .green.opacity(0.12)
+            return .green.opacity(0.2)
         case .deletion:
-            return .red.opacity(0.12)
+            return .red.opacity(0.2)
         case .modified:
-            return .yellow.opacity(0.10)
+            return .yellow.opacity(0.15)
         case .context, nil:
             return .clear
         }
