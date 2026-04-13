@@ -9,7 +9,6 @@ final class AppModel {
     var baseRef: GitRef?
     var compareRef: GitRef?
     var fileDiffs: [FileDiff] = []
-    var isLoading = false
     var error: String?
     var primaryBranchName = "main"
 
@@ -25,7 +24,6 @@ final class AppModel {
     func loadRefs() {
         guard let repoPath else { return }
 
-        isLoading = true
         error = nil
 
         Task.detached {
@@ -39,12 +37,10 @@ final class AppModel {
                     if self.baseRef == nil {
                         self.baseRef = refs.first { $0.name == primary }
                     }
-                    self.isLoading = false
                 }
             } catch {
                 await MainActor.run {
                     self.error = error.localizedDescription
-                    self.isLoading = false
                 }
             }
         }
@@ -56,7 +52,6 @@ final class AppModel {
             return
         }
 
-        isLoading = true
         error = nil
 
         let baseName = base.name
@@ -69,13 +64,11 @@ final class AppModel {
                 let diffs = DiffParser.parse(output)
                 await MainActor.run {
                     self.fileDiffs = diffs
-                    self.isLoading = false
                 }
             } catch {
                 await MainActor.run {
                     self.error = error.localizedDescription
                     self.fileDiffs = []
-                    self.isLoading = false
                 }
             }
         }
