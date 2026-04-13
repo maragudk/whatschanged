@@ -27,8 +27,16 @@ struct GitService: Sendable {
             }
         }
 
-        // Fetch PR refs from origin (best-effort) before listing everything.
-        _ = try? runGit(["fetch", "origin", "+refs/pull/*/head:refs/pull/*/head", "--quiet"])
+        // Fetch all remotes and PR refs (best-effort).
+        _ = try? runGit(["fetch", "--all", "--quiet"])
+        // GitHub/GitLab PR refs aren't covered by the default refspec, fetch them separately per remote.
+        let remotesOutput = (try? runGit(["remote"])) ?? ""
+        for remote in remotesOutput.components(separatedBy: "\n") {
+            let name = remote.trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { continue }
+            _ = try? runGit(["fetch", name, "+refs/pull/*/head:refs/pull/\(name)/*", "--quiet"])
+            _ = try? runGit(["fetch", name, "+refs/merge-requests/*/head:refs/merge-requests/\(name)/*", "--quiet"])
+        }
 
         // All refs sorted by committer date (newest first).
         let format = "%(refname:short)\t%(refname)\t%(committerdate:unix)\t%(subject)"
@@ -39,6 +47,7 @@ struct GitService: Sendable {
             "refs/heads/",
             "refs/remotes/",
             "refs/pull/",
+            "refs/merge-requests/",
         ])
 
         for line in output.components(separatedBy: "\n") {
@@ -49,8 +58,7 @@ struct GitService: Sendable {
             let date = parts.count > 2 ? Date(timeIntervalSince1970: Double(parts[2]) ?? 0) : nil
             let subject = parts.count > 3 ? String(parts[3]) : nil
 
-            if fullRef.hasPrefix("refs/pull/") {
-                guard fullRef.hasSuffix("/head") else { continue }
+            if fullRef.hasPrefix("refs/pull/") || fullRef.hasPrefix("refs/merge-requests/") {
                 refs.append(GitRef(name: fullRef, type: .pullRequest, worktreePath: nil, date: date, commitSubject: subject))
             } else if fullRef.hasPrefix("refs/remotes/") {
                 if shortName.contains("/HEAD") { continue }

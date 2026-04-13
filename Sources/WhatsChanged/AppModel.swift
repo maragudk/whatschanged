@@ -37,6 +37,7 @@ final class AppModel {
                     if self.baseRef == nil {
                         self.baseRef = refs.first { $0.name == primary }
                     }
+                    self.loadDiff()
                 }
             } catch {
                 await MainActor.run {

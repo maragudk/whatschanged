@@ -24,10 +24,24 @@ struct GitRef: Identifiable, Hashable, Sendable {
         case .worktree:
             return "\(name) (worktree)"
         case .pullRequest:
-            // name is "refs/pull/311/head", extract the number.
-            let number = name
+            if name.hasPrefix("refs/merge-requests/") {
+                // "refs/merge-requests/origin/123" -> "MR #123 (origin)"
+                let stripped = name.replacingOccurrences(of: "refs/merge-requests/", with: "")
+                let parts = stripped.split(separator: "/", maxSplits: 1)
+                if parts.count == 2 {
+                    return "MR #\(parts[1]) (\(parts[0]))"
+                }
+                return "MR \(stripped)"
+            }
+            // "refs/pull/origin/311" or "refs/pull/311/head" -> "PR #311"
+            let stripped = name
                 .replacingOccurrences(of: "refs/pull/", with: "")
                 .replacingOccurrences(of: "/head", with: "")
+            let parts = stripped.split(separator: "/")
+            let number = parts.last.map(String.init) ?? stripped
+            if parts.count == 2 {
+                return "PR #\(parts[1]) (\(parts[0]))"
+            }
             return "PR #\(number)"
         }
     }
