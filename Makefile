@@ -4,8 +4,9 @@ run:
 
 .PHONY: install
 install:
-	swift build -c release
-	cp .build/release/WhatsChanged /usr/local/bin/whatschanged
+	mkdir -p ~/.local/bin
+	printf '#!/bin/sh\nexec swift run --package-path %s WhatsChanged -- "$$@"\n' "$(CURDIR)" > ~/.local/bin/whatschanged
+	chmod +x ~/.local/bin/whatschanged
 
 .PHONY: release
 release:
