@@ -31,9 +31,6 @@ struct CommandPaletteView: View {
             PaletteCommand(id: "select-compare", name: "Select Compare Ref", shortcut: "Cmd+L", isEnabled: model.repoPath != nil) {
                 openComparePicker = true
             },
-            PaletteCommand(id: "checkout", name: "Check Out Compare Branch", shortcut: "Cmd+B", isEnabled: model.compareRef != nil) {
-                model.checkoutCompareRef()
-            },
             PaletteCommand(id: "push", name: "Push Current Branch", shortcut: nil, isEnabled: model.repoPath != nil) {
                 model.pushCurrentBranch()
             },

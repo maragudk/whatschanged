@@ -5,6 +5,7 @@ struct RefPickerView: View {
     let refs: [GitRef]
     @Binding var selection: GitRef?
     @Binding var isPresented: Bool
+    var onSelect: (() -> Void)?
     @State private var searchText = ""
     @State private var highlightedIndex: Int?
 
@@ -49,6 +50,7 @@ struct RefPickerView: View {
                         if let index = highlightedIndex, index < filtered.count {
                             selection = filtered[index]
                             isPresented = false
+                            onSelect?()
                         }
                         return .handled
                     }
@@ -69,6 +71,7 @@ struct RefPickerView: View {
                                 Button {
                                     selection = ref
                                     isPresented = false
+                                    onSelect?()
                                 } label: {
                                     HStack {
                                         Text(ref.displayName)

@@ -65,13 +65,7 @@ struct WhatsChangedApp: App {
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(model.repoRoot == nil)
 
-                Button("Check Out Compare Branch") {
-                    model.checkoutCompareRef()
-                }
-                .keyboardShortcut("b", modifiers: .command)
-                .disabled(model.compareRef == nil)
-
-                Button("Pull Current Branch") {
+Button("Pull Current Branch") {
                     model.pullCurrentBranch()
                 }
                 .keyboardShortcut("p", modifiers: .command)

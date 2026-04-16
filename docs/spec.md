@@ -54,7 +54,7 @@ A single user type: a developer who uses AI coding agents that create branches a
 
 ### Branch operations
 
-- Cmd+B checks out the compare ref as a local branch. For remote branches (e.g. `origin/feature-x`), the remote prefix is stripped and a local tracking branch is created. PR refs are checked out via `gh pr checkout`, MR refs via `glab mr checkout` -- both set up proper upstream tracking so pushing updates the PR/MR directly.
+- Selecting a compare ref automatically checks out that branch locally and pulls the latest. For remote branches, a local tracking branch is created. PR refs use `gh pr checkout`, MR refs use `glab mr checkout` -- both set up proper upstream tracking so pushing updates the PR/MR directly. On startup, the compare ref defaults to the current branch without checking out or pulling.
 - Cmd+P pulls the current branch from its configured upstream.
 - Push current branch: pushes to the configured upstream. Available via command palette (no keyboard shortcut).
 - Pull default branch: fetches all remotes and fast-forwards the default branch (main/master) to its upstream without checking it out. Available via command palette (no keyboard shortcut).

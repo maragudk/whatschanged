@@ -129,7 +129,8 @@ struct ContentView: View {
                 title: "Compare ref...",
                 refs: model.refs,
                 selection: $model.compareRef,
-                isPresented: $comparePickerOpen
+                isPresented: $comparePickerOpen,
+                onSelect: { model.checkoutAndLoadCompareRef() }
             )
 
             if let branch = model.currentBranch {
@@ -148,9 +149,6 @@ struct ContentView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .onChange(of: model.baseRef) {
-            model.loadDiff()
-        }
-        .onChange(of: model.compareRef) {
             model.loadDiff()
         }
     }

@@ -178,22 +178,28 @@ final class AppModel {
         }
     }
 
-    func checkoutCompareRef() {
-        guard let repoPath, let compare = compareRef else { return }
+    func checkoutAndLoadCompareRef() {
+        guard let repoPath, let compare = compareRef else {
+            fileDiffs = []
+            return
+        }
 
+        error = nil
         startLoading()
 
-        // For remote refs like "origin/feature-x", strip the remote prefix
-        // so git checkout creates a local tracking branch.
         let type = compare.type
         let name = compare.name
 
         Task.detached {
             let git = GitService(repoPath: repoPath)
             do {
+                // Skip checkout if we're already on the right branch.
+                let currentBranch = try? git.currentBranch()
+                let alreadyOnBranch = (type == .local || type == .worktree) && currentBranch == name
+
+                if !alreadyOnBranch {
                 switch type {
                 case .remote:
-                    // "origin/feature-x" -> "feature-x"
                     let parts = name.split(separator: "/", maxSplits: 1)
                     let branchName = parts.count == 2 ? String(parts[1]) : name
                     try git.checkout(branchName)
@@ -214,15 +220,25 @@ final class AppModel {
                         try git.checkoutPR(number)
                     }
                 }
+
+                }
+
+                // Pull latest for the checked-out branch.
+                _ = try? git.pull()
+
                 let branch = try? git.currentBranch()
                 await MainActor.run {
                     self.stopLoading()
                     self.currentBranch = branch
+                    self.loadDiff()
                 }
             } catch {
                 await MainActor.run {
                     self.stopLoading()
+                    self.currentBranch = try? GitService(repoPath: repoPath).currentBranch()
                     self.alertMessage = error.localizedDescription
+                    // Still load the diff even if checkout failed.
+                    self.loadDiff()
                 }
             }
         }

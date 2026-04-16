@@ -19,6 +19,12 @@ Tradeoffs: This approach has no built-in threading, resolution status, or notifi
 
 Review comments store the resolved commit SHAs rather than symbolic ref names (branch names). Ref names are mutable -- a branch can point to a different commit after a force push or new commit. SHAs are immutable and uniquely identify the exact code that was reviewed, regardless of how branches have moved since.
 
+## 2026-04-16: Auto-checkout on compare ref selection instead of separate Cmd+B
+
+Initially had a separate Cmd+B shortcut to check out the compare branch. This was an extra step in the review workflow — select a ref, see the diff, then remember to press Cmd+B before leaving comments. Since review comments are committed to the checked-out branch, you always need to be on it.
+
+Simplified to: selecting a compare ref automatically checks out the branch and pulls latest. Startup defaults the compare ref to the current branch without checkout/pull. This removes a command and makes the common flow (select branch, review, comment, commit) seamless.
+
 ## 2026-04-16: Use gh/glab CLI for PR/MR checkout instead of manual branch creation
 
 Initially created local branches like `pr-311` from PR refs using `git checkout -b pr-311 refs/pull/origin/311`. This worked for viewing code but pushing didn't update the PR — it created a new `pr-311` branch on the remote instead. The PR ref is a read-only reference, not connected to the PR's source branch.
