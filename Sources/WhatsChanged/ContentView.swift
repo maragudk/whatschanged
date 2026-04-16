@@ -60,7 +60,7 @@ struct ContentView: View {
             }
             .focusedSceneValue(\.openBasePicker, $basePickerOpen)
             .focusedSceneValue(\.openComparePicker, $comparePickerOpen)
-            .navigationTitle(URL(fileURLWithPath: model.repoPath!).lastPathComponent)
+            .navigationTitle("What's Changed in \(URL(fileURLWithPath: model.repoPath!).lastPathComponent)?")
         } else {
             welcomeView
         }
