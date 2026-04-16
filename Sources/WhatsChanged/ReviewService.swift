@@ -27,7 +27,7 @@ struct ReviewService: Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(comment)
-        let line = String(data: data, encoding: .utf8)! + "\n"
+        let line = String(decoding: data, as: UTF8.self) + "\n"
 
         let url = URL(fileURLWithPath: filePath)
         if FileManager.default.fileExists(atPath: filePath) {
@@ -62,7 +62,7 @@ struct ReviewService: Sendable {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let lines = try comments.map { comment in
             let data = try encoder.encode(comment)
-            return String(data: data, encoding: .utf8)!
+            return String(decoding: data, as: UTF8.self)
         }
         let text = lines.joined(separator: "\n") + "\n"
         try Data(text.utf8).write(to: URL(fileURLWithPath: filePath))

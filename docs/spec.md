@@ -82,7 +82,7 @@ A single user type: a developer who uses AI coding agents that create branches a
 
 ## Non-goals
 
-- **Broad git mutations.** The app only performs targeted git operations: committing `review.jsonl` (Cmd+S), checking out branches (Cmd+B), pulling (Cmd+P / command palette), and pushing (command palette). No merge, rebase, or destructive operations.
+- **Broad git mutations.** The app only performs targeted git operations: committing `review.jsonl` (Cmd+S), checking out branches (automatically on compare ref selection), pulling (Cmd+P / command palette), and pushing (command palette). No merge, rebase, or destructive operations.
 - **Uncommitted changes.** Only committed refs are diffable. Working tree and staged changes are not shown.
 - **Syntax highlighting.** Diff coloring only, no language-aware highlighting.
 - **Commit history.** No log view, no branch graph, no timeline.

@@ -63,7 +63,7 @@ struct GitService: Sendable {
             if fullRef.hasPrefix("refs/pull/") || fullRef.hasPrefix("refs/merge-requests/") {
                 refs.append(GitRef(name: fullRef, type: .pullRequest, worktreePath: nil, date: date, commitSubject: subject))
             } else if fullRef.hasPrefix("refs/remotes/") {
-                if shortName.contains("/HEAD") { continue }
+                if shortName.hasSuffix("/HEAD") { continue }
                 refs.append(GitRef(name: shortName, type: .remote, worktreePath: nil, date: date, commitSubject: subject))
             } else if worktreeBranches.contains(shortName) {
                 // Look up the worktree path for this branch.
@@ -95,6 +95,20 @@ struct GitService: Sendable {
         return try runGit(["commit", "-m", message])
     }
 
+    /// Commits the review comments file, including deletion when the file no longer exists.
+    /// Returns silently if there is nothing to commit.
+    @discardableResult
+    func commitReviewFile(_ path: String, message: String) throws -> String {
+        // -A stages additions, modifications, and deletions for this pathspec.
+        _ = try runGit(["add", "-A", "--", path])
+        // `git diff --cached --quiet` exits 0 when nothing is staged. Skip the commit in that case.
+        let nothingStaged = (try? runGit(["diff", "--cached", "--quiet", "--", path])) != nil
+        if nothingStaged {
+            return ""
+        }
+        return try runGit(["commit", "-m", message, "--", path])
+    }
+
     func push() throws {
         _ = try runGit(["push"])
     }
@@ -109,10 +123,17 @@ struct GitService: Sendable {
 
     func fetchAndUpdateBranch(_ branch: String) throws {
         _ = try runGit(["fetch", "--all", "--quiet"])
-        // Update local branch to match its upstream without checking it out.
         let upstream = try runGit(["rev-parse", "--abbrev-ref", "\(branch)@{upstream}"])
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        _ = try runGit(["update-ref", "refs/heads/\(branch)", upstream])
+        // Refuse non-fast-forward updates so unpushed local commits are never silently discarded.
+        // `merge-base --is-ancestor` exits 0 if the local tip is already in the upstream history.
+        let isFastForward = (try? runGit(["merge-base", "--is-ancestor", "refs/heads/\(branch)", upstream])) != nil
+        guard isFastForward else {
+            throw GitError.notFastForward(branch: branch)
+        }
+        let upstreamSHA = try runGit(["rev-parse", upstream])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = try runGit(["update-ref", "refs/heads/\(branch)", upstreamSHA])
     }
 
     func checkout(_ branch: String) throws {
@@ -150,57 +171,49 @@ struct GitService: Sendable {
 
     @discardableResult
     private func runCommand(_ executable: String, args: [String]) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = args
-        process.currentDirectoryURL = URL(fileURLWithPath: repoPath)
-        process.environment = ProcessInfo.processInfo.environment
-
-        let pipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = stderrPipe
-
-        try process.run()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard let output = String(data: data, encoding: .utf8) else {
-            throw GitError.invalidOutput
-        }
-
-        if process.terminationStatus != 0 {
-            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            let stderr = String(data: stderrData, encoding: .utf8) ?? ""
-            throw GitError.commandFailed(status: process.terminationStatus, output: stderr.isEmpty ? output : stderr)
-        }
-
-        return output
+        return try runProcess(executable: executable, arguments: args, currentDirectory: repoPath)
     }
 
     private func runGit(_ args: [String]) throws -> String {
+        return try runProcess(executable: "/usr/bin/git", arguments: ["-C", repoPath] + args, currentDirectory: nil)
+    }
+
+    private func runProcess(executable: String, arguments: [String], currentDirectory: String?) throws -> String {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = ["-C", repoPath] + args
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        if let currentDirectory {
+            process.currentDirectoryURL = URL(fileURLWithPath: currentDirectory)
+        }
         process.environment = ProcessInfo.processInfo.environment
 
-        let pipe = Pipe()
+        let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
-        process.standardOutput = pipe
+        process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
         try process.run()
 
-        // Read before waiting -- otherwise large output fills the pipe buffer
-        // and git blocks, deadlocking with waitUntilExit().
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        // Drain both pipes concurrently. Reading one fully before the other can deadlock
+        // if the unread pipe fills its kernel buffer (~16-64KB) and the child blocks writing.
+        let stderrBox = DataBox()
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            stderrBox.set(stderrPipe.fileHandleForReading.readDataToEndOfFile())
+            group.leave()
+        }
+        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+
         process.waitUntilExit()
-        guard let output = String(data: data, encoding: .utf8) else {
+        group.wait()
+        let stderrData = stderrBox.get()
+
+        guard let output = String(data: stdoutData, encoding: .utf8) else {
             throw GitError.invalidOutput
         }
 
         if process.terminationStatus != 0 {
-            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
             let stderr = String(data: stderrData, encoding: .utf8) ?? ""
             throw GitError.commandFailed(status: process.terminationStatus, output: stderr.isEmpty ? output : stderr)
         }
@@ -209,9 +222,25 @@ struct GitService: Sendable {
     }
 }
 
+private final class DataBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func set(_ value: Data) {
+        lock.lock(); defer { lock.unlock() }
+        data = value
+    }
+
+    func get() -> Data {
+        lock.lock(); defer { lock.unlock() }
+        return data
+    }
+}
+
 enum GitError: Error, LocalizedError {
     case invalidOutput
     case commandFailed(status: Int32, output: String)
+    case notFastForward(branch: String)
 
     var errorDescription: String? {
         switch self {
@@ -219,6 +248,8 @@ enum GitError: Error, LocalizedError {
             return "Failed to read git output"
         case .commandFailed(let status, let output):
             return "git exited with status \(status): \(output)"
+        case .notFastForward(let branch):
+            return "Refusing non-fast-forward update of \(branch). Local commits would be discarded."
         }
     }
 }
