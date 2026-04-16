@@ -49,8 +49,15 @@ A single user type: a developer who uses AI coding agents that create branches a
 - Lines with existing comments show a blue vertical bar in the gutter. For multi-line comments, the bars merge into a continuous stripe.
 - Clicking a commented line's number opens the same popover pre-filled, allowing editing (Cmd+Enter to save) or deletion.
 - `review.jsonl` is loaded on app start and on refresh. Comments are matched to lines in the current diff by file path, line number, and SHA.
-- Cmd+S commits `review.jsonl` to git (including deletions when all comments have been removed).
+- Cmd+S commits `review.jsonl` to git (including deletions when all comments have been removed). Committing is refused on main/master with an alert dialog.
 - The file is intended to be committed to git. An external agent reads and removes comments as it addresses them; when the file is empty, the agent deletes it.
+
+### Branch checkout
+
+- Cmd+B checks out the compare ref as a local branch.
+- For remote branches (e.g. `origin/feature-x`), the remote prefix is stripped and a local tracking branch is created.
+- PR/MR refs cannot be checked out directly; an alert is shown.
+- The current branch name is displayed in the toolbar between the ref pickers and the loading spinner.
 
 ### Freshness
 
@@ -60,7 +67,7 @@ A single user type: a developer who uses AI coding agents that create branches a
 
 ## Non-goals
 
-- **Git mutations.** No commit, push, merge, checkout, or any write operation against git. The only file the app writes is `review.jsonl` in the repository root.
+- **Broad git mutations.** The app only performs targeted git operations: committing `review.jsonl` (Cmd+S) and checking out branches (Cmd+B). No push, merge, rebase, or destructive operations.
 - **Uncommitted changes.** Only committed refs are diffable. Working tree and staged changes are not shown.
 - **Syntax highlighting.** Diff coloring only, no language-aware highlighting.
 - **Commit history.** No log view, no branch graph, no timeline.

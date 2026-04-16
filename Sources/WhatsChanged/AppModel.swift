@@ -15,6 +15,8 @@ final class AppModel {
     var baseSHA: String?
     var compareSHA: String?
     var reviewComments: [ReviewComment] = []
+    var currentBranch: String?
+    var alertMessage: String?
     var isLoading = false
     private var loadingCount = 0
 
@@ -42,11 +44,13 @@ final class AppModel {
                 let refs = try git.getRefs()
                 let primary = try git.primaryBranch()
                 let root = try git.findRepoRoot()
+                let branch = try? git.currentBranch()
                 await MainActor.run {
                     self.stopLoading()
                     self.refs = refs
                     self.primaryBranchName = primary
                     self.repoRoot = root
+                    self.currentBranch = branch
                     if self.baseRef == nil {
                         self.baseRef = refs.first { $0.name == primary }
                     }
@@ -144,10 +148,54 @@ final class AppModel {
         Task.detached {
             let git = GitService(repoPath: repoRoot)
             do {
+                let branch = try git.currentBranch()
+                if branch == "main" || branch == "master" {
+                    await MainActor.run {
+                        self.alertMessage = "Cannot commit review comments on \(branch). Switch to a feature branch first."
+                    }
+                    return
+                }
                 try git.commitFile("review.jsonl", message: message)
             } catch {
                 await MainActor.run {
                     self.error = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func checkoutCompareRef() {
+        guard let repoPath, let compare = compareRef else { return }
+
+        // For remote refs like "origin/feature-x", strip the remote prefix
+        // so git checkout creates a local tracking branch.
+        let branchName: String
+        switch compare.type {
+        case .remote:
+            // "origin/feature-x" -> "feature-x"
+            let parts = compare.name.split(separator: "/", maxSplits: 1)
+            branchName = parts.count == 2 ? String(parts[1]) : compare.name
+        case .local, .worktree:
+            branchName = compare.name
+        case .pullRequest:
+            alertMessage = "Cannot check out PR/MR refs directly."
+            return
+        }
+
+        startLoading()
+        Task.detached {
+            let git = GitService(repoPath: repoPath)
+            do {
+                try git.checkout(branchName)
+                let branch = try? git.currentBranch()
+                await MainActor.run {
+                    self.stopLoading()
+                    self.currentBranch = branch
+                }
+            } catch {
+                await MainActor.run {
+                    self.stopLoading()
+                    self.alertMessage = error.localizedDescription
                 }
             }
         }

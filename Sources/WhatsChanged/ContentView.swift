@@ -61,6 +61,11 @@ struct ContentView: View {
             .focusedSceneValue(\.openBasePicker, $basePickerOpen)
             .focusedSceneValue(\.openComparePicker, $comparePickerOpen)
             .navigationTitle("What's Changed in \(URL(fileURLWithPath: model.repoPath!).lastPathComponent)?")
+            .alert("Error", isPresented: Binding(get: { model.alertMessage != nil }, set: { if !$0 { model.alertMessage = nil } })) {
+                Button("OK") { model.alertMessage = nil }
+            } message: {
+                Text(model.alertMessage ?? "")
+            }
         } else {
             welcomeView
         }
@@ -86,6 +91,12 @@ struct ContentView: View {
                 selection: $model.compareRef,
                 isPresented: $comparePickerOpen
             )
+
+            if let branch = model.currentBranch {
+                Text(branch)
+                    .font(AppFont.caption)
+                    .foregroundStyle(.tertiary)
+            }
 
             Spacer()
 
