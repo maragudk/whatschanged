@@ -45,7 +45,7 @@ enum DiffParser {
                     newPath = String(parts[4].dropFirst(2)) // drop "b/"
                 }
                 i += 1
-                return (FileDiff(oldPath: oldPath, newPath: newPath, hunks: [], isBinary: true), i)
+                return (FileDiff(oldPath: oldPath, newPath: newPath, hunks: [], isBinary: true, additions: 0, deletions: 0), i)
             } else if line.hasPrefix("diff --git ") {
                 // Next file, no content.
                 return (nil, i)
@@ -87,7 +87,9 @@ enum DiffParser {
             }
         }
 
-        return (FileDiff(oldPath: oldPath, newPath: newPath, hunks: hunks, isBinary: isBinary), i)
+        let additions = hunks.reduce(0) { $0 + $1.lines.filter { $0.type == .addition }.count }
+        let deletions = hunks.reduce(0) { $0 + $1.lines.filter { $0.type == .deletion }.count }
+        return (FileDiff(oldPath: oldPath, newPath: newPath, hunks: hunks, isBinary: isBinary, additions: additions, deletions: deletions), i)
     }
 
     private static func parseFilePath(_ line: String, prefix: String) -> String {
@@ -145,12 +147,14 @@ enum DiffParser {
             i += 1
         }
 
-        let hunk = DiffHunk(
-            oldStart: oldStart, oldCount: oldCount,
-            newStart: newStart, newCount: newCount,
-            header: header,
-            lines: diffLines
-        )
+        // Build a temporary hunk to compute rows, then store the final result.
+        let tempHunk = DiffHunk(oldStart: oldStart, oldCount: oldCount,
+                                newStart: newStart, newCount: newCount,
+                                header: header, lines: diffLines, rows: [])
+        let rows = sideBySideRows(for: tempHunk)
+        let hunk = DiffHunk(oldStart: oldStart, oldCount: oldCount,
+                            newStart: newStart, newCount: newCount,
+                            header: header, lines: diffLines, rows: rows)
         return (hunk, i)
     }
 
@@ -169,7 +173,8 @@ enum DiffParser {
             case .context:
                 rows.append(SideBySideRow(
                     left: .init(lineNumber: oldLine, content: line.content, type: .context),
-                    right: .init(lineNumber: newLine, content: line.content, type: .context)
+                    right: .init(lineNumber: newLine, content: line.content, type: .context),
+                    leftSegments: nil, rightSegments: nil
                 ))
                 oldLine += 1
                 newLine += 1
@@ -191,19 +196,28 @@ enum DiffParser {
                 // Pair them up.
                 let maxCount = max(deletions.count, additions.count)
                 for j in 0..<maxCount {
+                    let isModified = !additions.isEmpty && !deletions.isEmpty
                     let leftSide: SideBySideRow.Side? = j < deletions.count
                         ? .init(
                             lineNumber: oldLine + j,
                             content: deletions[j].content,
-                            type: additions.isEmpty ? .deletion : .modified
+                            type: isModified ? .modified : .deletion
                         ) : nil
                     let rightSide: SideBySideRow.Side? = j < additions.count
                         ? .init(
                             lineNumber: newLine + j,
                             content: additions[j].content,
-                            type: deletions.isEmpty ? .addition : .modified
+                            type: isModified ? .modified : .addition
                         ) : nil
-                    rows.append(SideBySideRow(left: leftSide, right: rightSide))
+                    // Pre-compute inline diff segments for modified pairs.
+                    var leftSegs: (String, String, String)?
+                    var rightSegs: (String, String, String)?
+                    if isModified, let l = leftSide, let r = rightSide {
+                        leftSegs = diffSegments(l.content, r.content)
+                        rightSegs = diffSegments(r.content, l.content)
+                    }
+                    rows.append(SideBySideRow(left: leftSide, right: rightSide,
+                                             leftSegments: leftSegs, rightSegments: rightSegs))
                 }
                 oldLine += deletions.count
                 newLine += additions.count
@@ -211,7 +225,8 @@ enum DiffParser {
             case .addition:
                 rows.append(SideBySideRow(
                     left: nil,
-                    right: .init(lineNumber: newLine, content: line.content, type: .addition)
+                    right: .init(lineNumber: newLine, content: line.content, type: .addition),
+                    leftSegments: nil, rightSegments: nil
                 ))
                 newLine += 1
                 i += 1
@@ -219,5 +234,30 @@ enum DiffParser {
         }
 
         return rows
+    }
+
+    /// Find the common prefix and suffix between two strings, returning
+    /// (prefix, changed middle, suffix) for the first string.
+    static func diffSegments(_ a: String, _ b: String) -> (String, String, String) {
+        let aChars = Array(a)
+        let bChars = Array(b)
+
+        var prefixLen = 0
+        while prefixLen < aChars.count && prefixLen < bChars.count
+                && aChars[prefixLen] == bChars[prefixLen] {
+            prefixLen += 1
+        }
+
+        var suffixLen = 0
+        while suffixLen < (aChars.count - prefixLen) && suffixLen < (bChars.count - prefixLen)
+                && aChars[aChars.count - 1 - suffixLen] == bChars[bChars.count - 1 - suffixLen] {
+            suffixLen += 1
+        }
+
+        let prefix = String(aChars[..<prefixLen])
+        let suffix = String(aChars[(aChars.count - suffixLen)...])
+        let changed = String(aChars[prefixLen..<(aChars.count - suffixLen)])
+
+        return (prefix, changed, suffix)
     }
 }

@@ -284,3 +284,59 @@ The center divider was the trickiest visually. Per-row dividers leave gaps at fi
 ### Future work
 - The commit subject can contain tabs which would break the `for-each-ref` parsing since we split on tabs. Edge case, but possible.
 - Might want to show relative dates (e.g. "2h ago") alongside commit subjects in the picker.
+
+## Step 8: Performance and collapse toggle optimization
+
+### Prompt Context
+
+**Verbatim prompt:** Toggling collapse of a file can be slow on large files. Anything you can do to make the app faster? I care a lot about latency.
+**Interpretation:** Collapse/expand of files with many changes (700+ lines) takes about a second, especially the first time.
+**Inferred intent:** The app should feel instant for all interactions.
+
+### What I did
+Attempted multiple approaches to speed up collapse toggling in `/Sources/WhatsChanged/DiffView.swift` and `/Sources/WhatsChanged/DiffParser.swift`:
+
+1. **Pre-computed data at parse time** -- moved side-by-side row computation, inline diff segment computation, and addition/deletion counts from render time to parse time. Stored on `DiffHunk.rows`, `SideBySideRow.leftSegments`/`rightSegments`, and `FileDiff.additions`/`deletions`. This eliminated recomputation on every render.
+
+2. **Disabled animations on toggle** -- wrapped the collapse state change in `withTransaction` with `disablesAnimations = true`. No measurable effect.
+
+3. **Flattened view hierarchy** -- restructured from nested `FileSection > HunkView > SideBySideRowView` into a flat `DiffItem` enum with all items as direct `LazyVStack` children. Theory: `LazyVStack` only lazily creates direct children. No measurable effect on collapse.
+
+4. **Reverted to nested ForEach** -- went back to nested `ForEach` inside the `LazyVStack`, which SwiftUI flattens for lazy layout. Cleaner code, same performance.
+
+5. **Fixed row heights with `lineLimit(1)`** -- made all rows single-line to give SwiftUI uniform heights, eliminating per-row measurement. This made collapse instant. But lines truncated.
+
+6. **Pre-split long lines at 100 characters** -- attempted to get wrapping behavior with fixed-height rows by splitting long content into multiple rows at parse time. Each chunk becomes its own row. Collapse was still slow because chunks at the boundary still had variable widths causing SwiftUI to measure.
+
+7. **Reverted to natural wrapping** -- removed the pre-split, went back to SwiftUI's natural text wrapping. First collapse of large files ~1s, subsequent ones fast. Accepted this as the trade-off.
+
+### Why
+The user cares a lot about latency. Collapse/expand is a frequent interaction when reviewing multiple files.
+
+### What worked
+- Pre-computing data at parse time eliminated redundant work on every render -- good for general responsiveness.
+- `lineLimit(1)` made collapse instant, confirming that the bottleneck is SwiftUI measuring variable-height rows.
+
+### What didn't work
+- Disabling animations had no effect -- the cost isn't animation, it's layout measurement.
+- Flattening the view hierarchy had no effect -- `LazyVStack` handles nested `ForEach` correctly for lazy layout.
+- Pre-splitting at 100 chars didn't help because any remaining variability in line height (even within a chunk that's < 100 chars) still triggers measurement.
+
+### What I learned
+- **SwiftUI collapse performance is dominated by height measurement.** When removing variable-height views from a `LazyVStack`, SwiftUI needs to measure every removed view to compute the new scroll position. Fixed-height rows eliminate this entirely.
+- **`LazyVStack` handles nested `ForEach` lazily.** Flattening the hierarchy into direct children doesn't improve performance -- SwiftUI already flattens nested `ForEach` for lazy layout.
+- **First collapse is slow, subsequent ones are fast** because SwiftUI caches the height measurements after the first layout pass.
+- **The fundamental tension:** natural text wrapping = viewport-aware layout but variable heights = slow first collapse. Fixed heights = fast collapse but truncated content. There's no way to get both with SwiftUI's current layout system.
+
+### What was tricky
+The root cause was non-obvious. The symptom (slow toggle) could have been caused by many things: view creation, diffing, animation, or layout. It took multiple experiments to isolate that the bottleneck is specifically SwiftUI's height measurement of variable-height views during removal.
+
+The asymmetry was the key clue: collapse (removing 700 views, needs all heights) was always slower than expand (adding views, only visible ones measured lazily).
+
+### What warrants review
+- The pre-computed data changes in `/Sources/WhatsChanged/Models.swift` and `/Sources/WhatsChanged/DiffParser.swift` are good regardless of the wrapping approach -- they eliminate render-time recomputation.
+- The current state uses natural wrapping with ~1s first-collapse cost on large files. If this becomes a dealbreaker, `lineLimit(1)` is the escape hatch.
+
+### Future work
+- Could investigate `NSViewRepresentable` wrapping an `NSTableView` for the diff view -- AppKit's table view has fixed row heights and cell reuse built in.
+- Could try rendering diff content with `Canvas` instead of `Text` views for maximum performance.

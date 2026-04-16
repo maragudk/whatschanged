@@ -53,18 +53,8 @@ struct FileDiff: Identifiable, Sendable {
     let newPath: String
     let hunks: [DiffHunk]
     let isBinary: Bool
-
-    var additions: Int {
-        hunks.reduce(0) { sum, hunk in
-            sum + hunk.lines.filter { $0.type == .addition }.count
-        }
-    }
-
-    var deletions: Int {
-        hunks.reduce(0) { sum, hunk in
-            sum + hunk.lines.filter { $0.type == .deletion }.count
-        }
-    }
+    let additions: Int
+    let deletions: Int
 
     var displayPath: String {
         if oldPath == newPath || oldPath == "/dev/null" {
@@ -85,6 +75,7 @@ struct DiffHunk: Identifiable, Sendable {
     let newCount: Int
     let header: String
     let lines: [DiffLine]
+    let rows: [SideBySideRow]
 }
 
 struct DiffLine: Identifiable, Sendable {
@@ -103,6 +94,9 @@ struct SideBySideRow: Identifiable, Sendable {
     let id = UUID()
     let left: Side?
     let right: Side?
+    /// Pre-computed inline diff: (prefix, changed, suffix) for left and right.
+    let leftSegments: (String, String, String)?
+    let rightSegments: (String, String, String)?
 
     struct Side: Sendable {
         let lineNumber: Int

@@ -15,7 +15,30 @@ struct DiffView: View {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(fileDiffs) { file in
-                        FileSection(file: file, collapsedFiles: $collapsedFiles)
+                        FileHeaderView(file: file, collapsedFiles: $collapsedFiles)
+
+                        if !collapsedFiles.contains(file.displayPath) {
+                            if file.isBinary {
+                                Text("Binary file changed")
+                                    .font(AppFont.body)
+                                    .foregroundStyle(.secondary)
+                                    .padding(12)
+                            } else {
+                                ForEach(Array(file.hunks.enumerated()), id: \.element.id) { index, hunk in
+                                    if index > 0 {
+                                        Text("···")
+                                            .font(AppFont.caption)
+                                            .foregroundStyle(.tertiary)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 8)
+                                            .background(.quaternary.opacity(0.5))
+                                    }
+                                    ForEach(hunk.rows) { row in
+                                        SideBySideRowView(row: row)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 .overlay(alignment: .center) {
@@ -29,7 +52,7 @@ struct DiffView: View {
     }
 }
 
-private struct FileSection: View {
+private struct FileHeaderView: View {
     let file: FileDiff
     @Binding var collapsedFiles: Set<String>
 
@@ -38,7 +61,6 @@ private struct FileSection: View {
     }
 
     var body: some View {
-        // File header.
         Button {
             if isCollapsed {
                 collapsedFiles.remove(file.displayPath)
@@ -76,39 +98,6 @@ private struct FileSection: View {
         .background(Color(red: 0.95, green: 0.3, blue: 0.5).opacity(0.2))
         .contentShape(Rectangle())
         .pointerStyle(.link)
-
-        if !isCollapsed {
-            if file.isBinary {
-                Text("Binary file changed")
-                    .font(AppFont.body)
-                    .foregroundStyle(.secondary)
-                    .padding(12)
-            } else {
-                ForEach(Array(file.hunks.enumerated()), id: \.element.id) { index, hunk in
-                    if index > 0 {
-                        Text("···")
-                            .font(AppFont.caption)
-                            .foregroundStyle(.tertiary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(.quaternary.opacity(0.5))
-                    }
-                    HunkView(hunk: hunk)
-                }
-            }
-        }
-    }
-}
-
-private struct HunkView: View {
-    let hunk: DiffHunk
-
-    var body: some View {
-        let rows = DiffParser.sideBySideRows(for: hunk)
-
-        ForEach(rows) { row in
-            SideBySideRowView(row: row)
-        }
     }
 }
 
@@ -120,10 +109,7 @@ private struct SideBySideRowView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left side.
             lineSide(row.left, isLeft: true)
-
-            // Right side.
             lineSide(row.right, isLeft: false)
         }
         .frame(maxWidth: .infinity)
@@ -132,7 +118,6 @@ private struct SideBySideRowView: View {
     @ViewBuilder
     private func lineSide(_ side: SideBySideRow.Side?, isLeft: Bool) -> some View {
         HStack(spacing: 0) {
-            // Line number.
             if let side {
                 Text("\(side.lineNumber)")
                     .font(Self.monoFont)
@@ -144,7 +129,6 @@ private struct SideBySideRowView: View {
                     .frame(width: Self.lineNumberWidth + 8)
             }
 
-            // Content.
             inlineDiffText(side, isLeft: isLeft)
                 .font(Self.monoFont)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -155,14 +139,11 @@ private struct SideBySideRowView: View {
     }
 
     private func inlineDiffText(_ side: SideBySideRow.Side?, isLeft: Bool) -> Text {
-        guard let side, side.type == .modified,
-              let left = row.left, let right = row.right else {
+        let segments = isLeft ? row.leftSegments : row.rightSegments
+        guard let (prefix, changed, suffix) = segments else {
             return Text(side?.content ?? "")
         }
 
-        let content = isLeft ? left.content : right.content
-        let other = isLeft ? right.content : left.content
-        let (prefix, changed, suffix) = diffSegments(content, other)
         let highlight: Color = isLeft ? .red.opacity(0.35) : .green.opacity(0.35)
 
         var highlightedPrefix = AttributedString(prefix)
@@ -173,33 +154,6 @@ private struct SideBySideRowView: View {
         highlightedSuffix.backgroundColor = nil
 
         return Text(highlightedPrefix + highlightedChanged + highlightedSuffix)
-    }
-
-    /// Find the common prefix and suffix between two strings, returning
-    /// (prefix, changed middle, suffix) for the first string.
-    private func diffSegments(_ a: String, _ b: String) -> (String, String, String) {
-        let aChars = Array(a)
-        let bChars = Array(b)
-
-        // Common prefix length.
-        var prefixLen = 0
-        while prefixLen < aChars.count && prefixLen < bChars.count
-                && aChars[prefixLen] == bChars[prefixLen] {
-            prefixLen += 1
-        }
-
-        // Common suffix length (not overlapping with prefix).
-        var suffixLen = 0
-        while suffixLen < (aChars.count - prefixLen) && suffixLen < (bChars.count - prefixLen)
-                && aChars[aChars.count - 1 - suffixLen] == bChars[bChars.count - 1 - suffixLen] {
-            suffixLen += 1
-        }
-
-        let prefix = String(aChars[..<prefixLen])
-        let suffix = String(aChars[(aChars.count - suffixLen)...])
-        let changed = String(aChars[prefixLen..<(aChars.count - suffixLen)])
-
-        return (prefix, changed, suffix)
     }
 
     private func backgroundColor(for type: SideBySideRow.SideType?) -> Color {
