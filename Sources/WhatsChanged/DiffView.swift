@@ -52,7 +52,7 @@ private struct FileSection: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 12)
                 Text(file.displayPath)
-                    .font(.system(.body, design: .monospaced, weight: .semibold))
+                    .font(AppFont.bodySemibold)
                     .lineLimit(1)
                 Spacer()
                 if file.isBinary {
@@ -66,27 +66,33 @@ private struct FileSection: View {
                         Text("-\(file.deletions)")
                             .foregroundStyle(.red)
                     }
-                    .font(.system(.caption, design: .monospaced))
+                    .font(AppFont.caption)
                 }
             }
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
+        .background(Color(red: 0.95, green: 0.3, blue: 0.5).opacity(0.2))
         .contentShape(Rectangle())
         .pointerStyle(.link)
-
-        Divider()
 
         if !isCollapsed {
             if file.isBinary {
                 Text("Binary file changed")
-                    .font(.system(.body, design: .monospaced))
+                    .font(AppFont.body)
                     .foregroundStyle(.secondary)
                     .padding(12)
             } else {
-                ForEach(file.hunks) { hunk in
+                ForEach(Array(file.hunks.enumerated()), id: \.element.id) { index, hunk in
+                    if index > 0 {
+                        Text("···")
+                            .font(AppFont.caption)
+                            .foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(.quaternary.opacity(0.5))
+                    }
                     HunkView(hunk: hunk)
                 }
             }
@@ -110,7 +116,7 @@ private struct SideBySideRowView: View {
     let row: SideBySideRow
 
     private static let lineNumberWidth: CGFloat = 50
-    private static let monoFont = Font.system(.body, design: .monospaced)
+    private static let monoFont = AppFont.body
 
     var body: some View {
         HStack(spacing: 0) {
