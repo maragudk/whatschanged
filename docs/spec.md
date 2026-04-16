@@ -2,7 +2,7 @@
 
 ## Objective
 
-WhatsChanged is a read-only native macOS app for viewing side-by-side code diffs across git branches, worktrees, remotes, and GitHub pull requests (including from forks) in a single repository. It solves the problem of keeping track of what AI coding agents (and humans) have changed across many branches and worktrees, without switching contexts in the terminal or running `git diff` twenty times.
+WhatsChanged is a read-only native macOS app for viewing side-by-side code diffs across git branches, worktrees, remotes, and pull requests (GitHub and GitLab, including from forks) in a single repository. It solves the problem of keeping track of what AI coding agents (and humans) have changed across many branches and worktrees, without switching contexts in the terminal or running `git diff` twenty times.
 
 ## Users
 
@@ -14,12 +14,12 @@ A single user type: a developer who uses AI coding agents that create branches a
 
 - Open a repository via command-line argument (`whatschanged /path/to/repo`), Cmd+O, or a folder picker on the welcome screen.
 - The app resolves worktree paths back to the main repository automatically.
-- Window title shows the repository directory name.
+- Window title reads "What's Changed in \<dir\>?"
 
 ### Ref selection
 
 - Two dropdown selects at the top of the window: base ref (left) and compare ref (right). Keyboard shortcuts: Cmd+K for base, Cmd+L for compare.
-- Dropdowns list all local branches, remote-tracking branches, worktree-associated branches, and GitHub pull request refs -- all sorted by commit date, newest first.
+- Dropdowns list all local branches, remote-tracking branches, worktree-associated branches, GitHub PR refs, and GitLab MR refs -- all sorted by commit date, newest first.
 - Each ref shows its name and the first line of its latest commit message.
 - Typing while a dropdown is open filters the list by substring match. Arrow keys navigate, Enter selects, Escape closes.
 - Base ref defaults to the repository's primary branch (main or master).
@@ -27,16 +27,22 @@ A single user type: a developer who uses AI coding agents that create branches a
 ### Diff view
 
 - A single scrollable side-by-side diff of all changed files between the two selected refs.
-- Files are separated by header bars showing the file path and +/- line counts.
+- File sections are collapsible by clicking the file header. Collapsed state persists across refreshes. A chevron and pointer cursor indicate clickability.
+- File headers have a pink background and show the file path and +/- line counts.
 - Left column shows the base version, right column shows the compare version.
 - Changed lines are highlighted with diff coloring: green for additions, red for deletions, yellow for modifications.
+- Modified lines show inline word-level diff highlighting: the specific characters that changed are highlighted with a stronger color within the line background.
+- Long lines soft-wrap naturally within each column.
 - Line numbers displayed on both sides.
 - A continuous vertical divider separates the two columns.
+- Gaps between hunks within a file are indicated by a centered "···" separator with a subtle background.
 - Binary files show a "binary file changed" message instead of a diff.
+- Prefers the MonoLisa font if installed, falls back to the system monospaced font.
 
 ### Freshness
 
-- The ref list refreshes on demand via Cmd+R. This also fetches the latest pull request refs from the remote.
+- The ref list and current diff refresh on demand via Cmd+R.
+- Refresh fetches all remotes (`git fetch --all`), plus PR/MR refs from each remote.
 
 ## Non-goals
 
@@ -62,5 +68,7 @@ A single user type: a developer who uses AI coding agents that create branches a
 
 ## Open questions
 
-- **File navigation for large diffs.** When a diff spans many files, scrolling through all of them linearly may be slow. A file list sidebar or jump-to-file feature might be needed. Deferred until real-world usage reveals whether it's a problem.
-- **Cancellation of in-flight diffs.** If the user changes ref selection while a large diff is loading, the old request isn't cancelled. Could lead to stale results briefly appearing. Worth addressing if it causes confusion.
+- **First-collapse latency on large files.** Collapsing a file with 700+ changed lines takes ~1s the first time due to SwiftUI measuring variable-height rows. Subsequent collapses are instant. An NSTableView-based approach or Canvas rendering could eliminate this.
+- **File navigation for large diffs.** When a diff spans many files, scrolling through all of them linearly may be slow. A file list sidebar or jump-to-file feature might be needed.
+- **Cancellation of in-flight diffs.** If the user changes ref selection while a large diff is loading, the old request isn't cancelled. Could lead to stale results briefly appearing.
+- **Standalone binary.** The app only launches correctly via `swift run`, not as a standalone binary. This appears to be a macOS window server issue with bare SwiftUI executables. Currently worked around with a shell wrapper script.
