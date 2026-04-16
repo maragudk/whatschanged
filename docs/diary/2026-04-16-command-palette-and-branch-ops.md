@@ -88,3 +88,46 @@ The three failed approaches consumed significant debugging time. The symptoms we
 ### Future work
 - Consider using `NSPanel` for a more polished floating palette appearance.
 - The command list is hardcoded — a registration system would make it easier to add commands.
+
+## Step 3: PR/MR checkout and push
+
+### Prompt Context
+
+**Verbatim prompt:** "Now I want to be able to check out remote pull request branches with the command B shortcut. Maybe we should just create a local branch called pr- whatever the number is, and the same for merge requests."
+**Interpretation:** Enable Cmd+B for PR/MR refs, not just regular branches.
+**Inferred intent:** Complete the review-to-action workflow — review a PR diff, check it out, make changes, push.
+
+### What I did
+- Initially added `checkoutNewBranch()` to GitService that created `pr-<number>` / `mr-<number>` branches from the PR/MR ref with `git checkout -b`.
+- Extracted the remote name from the ref path and configured branch tracking via `git config`.
+- Added `push()` and `pushCurrentBranch()` to GitService/AppModel, exposed in the command palette.
+- Then discovered that pushing `pr-311` doesn't update the actual PR — it creates a new branch on the remote.
+- Replaced the manual branch creation with `gh pr checkout <number>` for GitHub PRs and `glab mr checkout <number>` for GitLab MRs.
+- Added a generic `runCommand()` helper to GitService for running non-git executables in the repo directory.
+
+### Why
+The manual `git checkout -b pr-311 refs/pull/origin/311` approach created a branch that wasn't connected to the PR's source branch. Pushing it would create a new remote branch instead of updating the PR. `gh pr checkout` and `glab mr checkout` handle all the edge cases — they check out the PR's actual source branch with correct upstream tracking.
+
+### What worked
+- `gh pr checkout` is exactly the right tool — it creates a local branch with the PR's source branch name and sets up tracking so `git push` updates the PR.
+- The fallback pattern (try `checkout -b`, catch and `checkout` if branch exists) was a clean way to handle re-checkout. This was replaced by the `gh`/`glab` approach which handles this internally.
+
+### What didn't work
+- **Manual PR branch creation**: `git checkout -b pr-311 refs/pull/origin/311` created a branch that pushed to `refs/heads/pr-311` on the remote, not the PR's source branch. This is a fundamental limitation — PR refs are read-only references, not branch-tracking refs.
+- **Hardcoding `origin` as remote**: The user caught that the tracking branch isn't necessarily from origin. Fixed by extracting the remote from the ref name, then replaced entirely by the `gh`/`glab` approach which resolves the remote correctly.
+- **`git push` without upstream**: Branches created from PR refs had no upstream configured. Initially worked around with `git push -u origin`, then with `git config branch.<name>.remote`, then eliminated the problem entirely by using `gh`/`glab`.
+
+### What I learned
+- PR/MR refs (`refs/pull/*/head`, `refs/merge-requests/*/head`) are not the same as branch refs. Creating a local branch from them doesn't establish any relationship with the PR's source branch.
+- `gh pr checkout` is the standard way to check out PRs — it resolves the source branch, creates a local tracking branch, and handles forks correctly. Don't reinvent it.
+
+### What was tricky
+The remote extraction from ref names (`refs/pull/origin/311` -> remote `origin`, number `311`) went through several iterations as the approach evolved. Each iteration was correct for its approach but became unnecessary when switching to `gh`/`glab`.
+
+### What warrants review
+- The app now has external tool dependencies (`gh` for GitHub, `glab` for GitLab). These are not bundled — they must be installed on the user's system. If they're missing, checkout will fail with an error alert.
+- `runCommand` uses `/usr/bin/env` to resolve `gh`/`glab` from PATH. This should work in most setups but could fail if the tools are installed in non-standard locations not in PATH.
+
+### Future work
+- Consider detecting whether `gh`/`glab` are installed and showing a more helpful error message.
+- The push command could show a success confirmation instead of silently succeeding.
