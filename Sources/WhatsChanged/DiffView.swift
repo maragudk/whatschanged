@@ -119,7 +119,7 @@ private struct SideBySideRowView: View {
     private func lineSide(_ side: SideBySideRow.Side?, isLeft: Bool) -> some View {
         HStack(spacing: 0) {
             if let side {
-                Text("\(side.lineNumber)")
+                Text(String(side.lineNumber))
                     .font(Self.monoFont)
                     .foregroundStyle(.tertiary)
                     .frame(width: Self.lineNumberWidth, alignment: .trailing)
