@@ -87,6 +87,17 @@ struct GitService: Sendable {
         return try runGit(["diff", "--no-color", "-M", base, compare])
     }
 
+    @discardableResult
+    func commitFile(_ path: String, message: String) throws -> String {
+        _ = try runGit(["add", path])
+        return try runGit(["commit", "-m", message])
+    }
+
+    func resolveRef(_ ref: String) throws -> String {
+        let output = try runGit(["rev-parse", ref])
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func primaryBranch() throws -> String {
         // Try main, then master, then fall back to HEAD.
         for candidate in ["main", "master"] {

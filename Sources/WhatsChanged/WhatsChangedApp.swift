@@ -57,6 +57,12 @@ struct WhatsChangedApp: App {
                 }
                 .keyboardShortcut("o", modifiers: .command)
 
+                Button("Commit Review Comments") {
+                    model.commitReviewComments()
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(model.repoRoot == nil)
+
                 Button("Refresh") {
                     model.loadRefs()
                 }

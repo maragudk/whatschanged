@@ -2,7 +2,7 @@
 
 ## Objective
 
-WhatsChanged is a read-only native macOS app for viewing side-by-side code diffs across git branches, worktrees, remotes, and pull requests (GitHub and GitLab, including from forks) in a single repository. It solves the problem of keeping track of what AI coding agents (and humans) have changed across many branches and worktrees, without switching contexts in the terminal or running `git diff` twenty times.
+WhatsChanged is a native macOS app for viewing side-by-side code diffs and leaving review comments across git branches, worktrees, remotes, and pull requests (GitHub and GitLab, including from forks) in a single repository. It solves the problem of keeping track of what AI coding agents (and humans) have changed across many branches and worktrees, without switching contexts in the terminal or running `git diff` twenty times.
 
 ## Users
 
@@ -39,14 +39,28 @@ A single user type: a developer who uses AI coding agents that create branches a
 - Binary files show a "binary file changed" message instead of a diff.
 - Prefers the MonoLisa font if installed, falls back to the system monospaced font.
 
+### Review comments
+
+- Clicking a line number on the compare side (right column) opens a popover anchored to the line number with a text field for adding a review comment. The line number shows a pointer cursor and subtle highlight on hover.
+- For multi-line comments: click a line number to set an anchor, then shift+click another line number to select a range.
+- Cmd+Enter saves the comment. Escape cancels without saving.
+- Comments are appended immediately to `review.jsonl` at the repository root, one JSON object per line: `{"file": "...", "startLine": 42, "endLine": 45, "comment": "...", "base": "<sha>", "compare": "<sha>"}`.
+- `startLine` and `endLine` refer to compare-side line numbers (equal for single-line comments). `base` and `compare` are the resolved commit SHAs of the current comparison.
+- Lines with existing comments show a blue vertical bar in the gutter. For multi-line comments, the bars merge into a continuous stripe.
+- Clicking a commented line's number opens the same popover pre-filled, allowing editing (Cmd+Enter to save) or deletion.
+- `review.jsonl` is loaded on app start and on refresh. Comments are matched to lines in the current diff by file path, line number, and SHA.
+- Cmd+S commits `review.jsonl` to git (including deletions when all comments have been removed).
+- The file is intended to be committed to git. An external agent reads and removes comments as it addresses them; when the file is empty, the agent deletes it.
+
 ### Freshness
 
 - The ref list and current diff refresh on demand via Cmd+R.
 - Refresh fetches all remotes (`git fetch --all`), plus PR/MR refs from each remote.
+- A spinner appears in the toolbar while refs or diffs are loading.
 
 ## Non-goals
 
-- **Git mutations.** No commit, push, merge, checkout, or any write operation. This is strictly a viewer.
+- **Git mutations.** No commit, push, merge, checkout, or any write operation against git. The only file the app writes is `review.jsonl` in the repository root.
 - **Uncommitted changes.** Only committed refs are diffable. Working tree and staged changes are not shown.
 - **Syntax highlighting.** Diff coloring only, no language-aware highlighting.
 - **Commit history.** No log view, no branch graph, no timeline.

@@ -88,6 +88,11 @@ struct ContentView: View {
             )
 
             Spacer()
+
+            if model.isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

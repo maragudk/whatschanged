@@ -1,8 +1,26 @@
 import SwiftUI
 
+@Observable
+private final class CommentAnchor {
+    var file: String?
+    var line: Int?
+
+    func set(file: String, line: Int) {
+        self.file = file
+        self.line = line
+    }
+
+    func clear() {
+        file = nil
+        line = nil
+    }
+}
+
 struct DiffView: View {
+    @Environment(AppModel.self) private var model
     let fileDiffs: [FileDiff]
     @State private var collapsedFiles: Set<String> = []
+    @State private var anchor = CommentAnchor()
 
     var body: some View {
         if fileDiffs.isEmpty {
@@ -34,7 +52,7 @@ struct DiffView: View {
                                             .background(.quaternary.opacity(0.5))
                                     }
                                     ForEach(hunk.rows) { row in
-                                        SideBySideRowView(row: row)
+                                        SideBySideRowView(row: row, filePath: file.newPath, anchor: anchor)
                                     }
                                 }
                             }
@@ -102,10 +120,24 @@ private struct FileHeaderView: View {
 }
 
 private struct SideBySideRowView: View {
+    @Environment(AppModel.self) private var model
     let row: SideBySideRow
+    let filePath: String
+    let anchor: CommentAnchor
+    @State private var showPopover = false
+    @State private var commentText = ""
+    @State private var popoverStartLine = 0
+    @State private var popoverEndLine = 0
+    @State private var isHoveringRightLineNumber = false
 
     private static let lineNumberWidth: CGFloat = 50
+    private static let commentIndicatorWidth: CGFloat = 8
     private static let monoFont = AppFont.body
+
+    private var existingComment: ReviewComment? {
+        guard let line = row.right?.lineNumber else { return nil }
+        return model.reviewComment(forFile: filePath, line: line)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -119,14 +151,52 @@ private struct SideBySideRowView: View {
     private func lineSide(_ side: SideBySideRow.Side?, isLeft: Bool) -> some View {
         HStack(spacing: 0) {
             if let side {
+                if !isLeft {
+                    commentIndicator(for: side)
+                }
+
                 Text(String(side.lineNumber))
                     .font(Self.monoFont)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(!isLeft && isHoveringRightLineNumber ? .secondary : .tertiary)
                     .frame(width: Self.lineNumberWidth, alignment: .trailing)
                     .padding(.trailing, 8)
+                    .background(!isLeft && isHoveringRightLineNumber ? Color.primary.opacity(0.06) : .clear)
+                    .contentShape(Rectangle())
+                    .pointerStyle(isLeft ? nil : .link)
+                    .onHover { hovering in
+                        if !isLeft { isHoveringRightLineNumber = hovering }
+                    }
+                    .onTapGesture {
+                        if !isLeft {
+                            handleTap(line: side.lineNumber)
+                        }
+                    }
+                    .popover(isPresented: isLeft ? .constant(false) : $showPopover, arrowEdge: .leading) {
+                        CommentPopoverView(
+                            commentText: $commentText,
+                            isPresented: $showPopover,
+                            startLine: popoverStartLine,
+                            endLine: popoverEndLine,
+                            existingComment: existingComment,
+                            onSave: { text in
+                                if let existing = existingComment {
+                                    var updated = existing
+                                    updated.comment = text
+                                    model.updateReviewComment(updated)
+                                } else {
+                                    model.addReviewComment(file: filePath, startLine: popoverStartLine, endLine: popoverEndLine, comment: text)
+                                }
+                            },
+                            onDelete: {
+                                if let existing = existingComment {
+                                    model.deleteReviewComment(existing)
+                                }
+                            }
+                        )
+                    }
             } else {
                 Color.clear
-                    .frame(width: Self.lineNumberWidth + 8)
+                    .frame(width: (isLeft ? 0 : Self.commentIndicatorWidth) + Self.lineNumberWidth + 8)
             }
 
             inlineDiffText(side, isLeft: isLeft)
@@ -136,6 +206,41 @@ private struct SideBySideRowView: View {
         }
         .padding(.horizontal, 4)
         .background(backgroundColor(for: side?.type))
+    }
+
+    private func handleTap(line: Int) {
+        let shiftPressed = NSEvent.modifierFlags.contains(.shift)
+
+        if shiftPressed, let anchorLine = anchor.line, anchor.file == filePath {
+            // Shift+click: set range from anchor to this line
+            popoverStartLine = min(anchorLine, line)
+            popoverEndLine = max(anchorLine, line)
+            anchor.clear()
+        } else if let existing = existingComment {
+            // Click on existing comment: edit it
+            popoverStartLine = existing.startLine
+            popoverEndLine = existing.endLine
+            commentText = existing.comment
+            anchor.clear()
+            showPopover = true
+            return
+        } else {
+            // Plain click: set anchor and open single-line popover
+            anchor.set(file: filePath, line: line)
+            popoverStartLine = line
+            popoverEndLine = line
+        }
+
+        commentText = ""
+        showPopover = true
+    }
+
+    @ViewBuilder
+    private func commentIndicator(for side: SideBySideRow.Side) -> some View {
+        let hasComment = model.reviewComment(forFile: filePath, line: side.lineNumber) != nil
+        Rectangle()
+            .fill(hasComment ? Color.blue.opacity(0.7) : .clear)
+            .frame(width: 4)
     }
 
     private func inlineDiffText(_ side: SideBySideRow.Side?, isLeft: Bool) -> Text {
@@ -167,5 +272,75 @@ private struct SideBySideRowView: View {
         case .context, nil:
             return .clear
         }
+    }
+}
+
+private struct CommentPopoverView: View {
+    @Binding var commentText: String
+    @Binding var isPresented: Bool
+    let startLine: Int
+    let endLine: Int
+    let existingComment: ReviewComment?
+    let onSave: (String) -> Void
+    let onDelete: () -> Void
+
+    private var lineLabel: String {
+        if startLine <= 0 && endLine <= 0 {
+            return ""
+        }
+        if startLine == endLine {
+            return "Line \(startLine)"
+        }
+        return "Lines \(startLine)-\(endLine)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(existingComment != nil ? "Edit comment" : "Add comment")
+                    .font(.headline)
+                Text(lineLabel)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextEditor(text: $commentText)
+                .font(AppFont.body)
+                .frame(minWidth: 300, minHeight: 60)
+                .scrollContentBackground(.hidden)
+
+            HStack {
+                if existingComment != nil {
+                    Button("Delete") {
+                        onDelete()
+                        isPresented = false
+                    }
+                    .foregroundStyle(.red)
+                }
+
+                Spacer()
+
+                Text("Cmd+Enter to save")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
+                Button("Save") {
+                    save()
+                }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .onExitCommand {
+            isPresented = false
+        }
+    }
+
+    private func save() {
+        let trimmed = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        onSave(trimmed)
+        isPresented = false
     }
 }

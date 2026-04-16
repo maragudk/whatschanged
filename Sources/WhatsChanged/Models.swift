@@ -1,5 +1,19 @@
 import Foundation
 
+struct ReviewComment: Codable, Identifiable, Sendable {
+    var id: String { "\(file):\(startLine):\(endLine):\(base):\(compare)" }
+    let file: String
+    let startLine: Int
+    let endLine: Int
+    var comment: String
+    let base: String
+    let compare: String
+
+    func containsLine(_ line: Int) -> Bool {
+        line >= startLine && line <= endLine
+    }
+}
+
 struct GitRef: Identifiable, Hashable, Sendable {
     var id: String { name }
     let name: String
