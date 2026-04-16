@@ -93,6 +93,14 @@ struct GitService: Sendable {
         return try runGit(["commit", "-m", message])
     }
 
+    func push() throws {
+        _ = try runGit(["push"])
+    }
+
+    func pushSetUpstream(_ remote: String, _ branch: String) throws {
+        _ = try runGit(["push", "-u", remote, branch])
+    }
+
     func pull() throws {
         _ = try runGit(["pull"])
     }
@@ -109,8 +117,12 @@ struct GitService: Sendable {
         _ = try runGit(["checkout", branch])
     }
 
-    func checkoutNewBranch(_ name: String, from ref: String) throws {
-        _ = try runGit(["checkout", "-b", name, ref])
+    func checkoutPR(_ number: String) throws {
+        try runCommand("/usr/bin/env", args: ["gh", "pr", "checkout", number])
+    }
+
+    func checkoutMR(_ number: String) throws {
+        try runCommand("/usr/bin/env", args: ["glab", "mr", "checkout", number])
     }
 
     func currentBranch() throws -> String {
@@ -132,6 +144,36 @@ struct GitService: Sendable {
             }
         }
         return "HEAD"
+    }
+
+    @discardableResult
+    private func runCommand(_ executable: String, args: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = args
+        process.currentDirectoryURL = URL(fileURLWithPath: repoPath)
+        process.environment = ProcessInfo.processInfo.environment
+
+        let pipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = stderrPipe
+
+        try process.run()
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard let output = String(data: data, encoding: .utf8) else {
+            throw GitError.invalidOutput
+        }
+
+        if process.terminationStatus != 0 {
+            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+            throw GitError.commandFailed(status: process.terminationStatus, output: stderr.isEmpty ? output : stderr)
+        }
+
+        return output
     }
 
     private func runGit(_ args: [String]) throws -> String {

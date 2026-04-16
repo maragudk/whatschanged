@@ -167,54 +167,62 @@ final class AppModel {
     func checkoutCompareRef() {
         guard let repoPath, let compare = compareRef else { return }
 
+        startLoading()
+
         // For remote refs like "origin/feature-x", strip the remote prefix
         // so git checkout creates a local tracking branch.
-        let branchName: String
-        switch compare.type {
-        case .remote:
-            // "origin/feature-x" -> "feature-x"
-            let parts = compare.name.split(separator: "/", maxSplits: 1)
-            branchName = parts.count == 2 ? String(parts[1]) : compare.name
-        case .local, .worktree:
-            branchName = compare.name
-        case .pullRequest:
-            if compare.name.hasPrefix("refs/merge-requests/") {
-                // "refs/merge-requests/origin/123" -> "mr-123"
-                let stripped = compare.name.replacingOccurrences(of: "refs/merge-requests/", with: "")
-                let parts = stripped.split(separator: "/")
-                let number = parts.count == 2 ? String(parts[1]) : stripped
-                branchName = "mr-\(number)"
-            } else {
-                // "refs/pull/origin/311" -> "pr-311"
-                let stripped = compare.name
-                    .replacingOccurrences(of: "refs/pull/", with: "")
-                    .replacingOccurrences(of: "/head", with: "")
-                let parts = stripped.split(separator: "/")
-                let number = parts.last.map(String.init) ?? stripped
-                branchName = "pr-\(number)"
-            }
-        }
+        let type = compare.type
+        let name = compare.name
 
-        let isPR = compare.type == .pullRequest
-        let refName = compare.name
-
-        startLoading()
         Task.detached {
             let git = GitService(repoPath: repoPath)
             do {
-                if isPR {
-                    do {
-                        try git.checkoutNewBranch(branchName, from: refName)
-                    } catch {
-                        try git.checkout(branchName)
-                    }
-                } else {
+                switch type {
+                case .remote:
+                    // "origin/feature-x" -> "feature-x"
+                    let parts = name.split(separator: "/", maxSplits: 1)
+                    let branchName = parts.count == 2 ? String(parts[1]) : name
                     try git.checkout(branchName)
+                case .local, .worktree:
+                    try git.checkout(name)
+                case .pullRequest:
+                    if name.hasPrefix("refs/merge-requests/") {
+                        let stripped = name.replacingOccurrences(of: "refs/merge-requests/", with: "")
+                        let parts = stripped.split(separator: "/")
+                        let number = parts.count == 2 ? String(parts[1]) : stripped
+                        try git.checkoutMR(number)
+                    } else {
+                        let stripped = name
+                            .replacingOccurrences(of: "refs/pull/", with: "")
+                            .replacingOccurrences(of: "/head", with: "")
+                        let parts = stripped.split(separator: "/")
+                        let number = parts.last.map(String.init) ?? stripped
+                        try git.checkoutPR(number)
+                    }
                 }
                 let branch = try? git.currentBranch()
                 await MainActor.run {
                     self.stopLoading()
                     self.currentBranch = branch
+                }
+            } catch {
+                await MainActor.run {
+                    self.stopLoading()
+                    self.alertMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func pushCurrentBranch() {
+        guard let repoPath else { return }
+        startLoading()
+        Task.detached {
+            let git = GitService(repoPath: repoPath)
+            do {
+                try git.push()
+                await MainActor.run {
+                    self.stopLoading()
                 }
             } catch {
                 await MainActor.run {
