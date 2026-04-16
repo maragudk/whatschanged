@@ -201,6 +201,47 @@ final class AppModel {
         }
     }
 
+    func pullCurrentBranch() {
+        guard let repoPath else { return }
+        startLoading()
+        Task.detached {
+            let git = GitService(repoPath: repoPath)
+            do {
+                try git.pull()
+                await MainActor.run {
+                    self.stopLoading()
+                    self.loadDiff()
+                }
+            } catch {
+                await MainActor.run {
+                    self.stopLoading()
+                    self.alertMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func pullDefaultBranch() {
+        guard let repoPath else { return }
+        let branch = primaryBranchName
+        startLoading()
+        Task.detached {
+            let git = GitService(repoPath: repoPath)
+            do {
+                try git.fetchAndUpdateBranch(branch)
+                await MainActor.run {
+                    self.stopLoading()
+                    self.loadDiff()
+                }
+            } catch {
+                await MainActor.run {
+                    self.stopLoading()
+                    self.alertMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
     func reviewComment(forFile file: String, line: Int) -> ReviewComment? {
         guard let baseSHA, let compareSHA else { return nil }
         return reviewComments.first {

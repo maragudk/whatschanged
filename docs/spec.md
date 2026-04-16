@@ -52,11 +52,11 @@ A single user type: a developer who uses AI coding agents that create branches a
 - Cmd+S commits `review.jsonl` to git (including deletions when all comments have been removed). Committing is refused on main/master with an alert dialog.
 - The file is intended to be committed to git. An external agent reads and removes comments as it addresses them; when the file is empty, the agent deletes it.
 
-### Branch checkout
+### Branch operations
 
-- Cmd+B checks out the compare ref as a local branch.
-- For remote branches (e.g. `origin/feature-x`), the remote prefix is stripped and a local tracking branch is created.
-- PR/MR refs cannot be checked out directly; an alert is shown.
+- Cmd+B checks out the compare ref as a local branch. For remote branches (e.g. `origin/feature-x`), the remote prefix is stripped and a local tracking branch is created. PR/MR refs cannot be checked out directly; an alert is shown.
+- Cmd+P pulls the current branch from its configured upstream.
+- Pull default branch: fetches all remotes and fast-forwards the default branch (main/master) to its upstream without checking it out. Available via command palette (no keyboard shortcut).
 - The current branch name is displayed in the toolbar between the ref pickers and the loading spinner.
 
 ### Freshness
@@ -67,7 +67,7 @@ A single user type: a developer who uses AI coding agents that create branches a
 
 ## Non-goals
 
-- **Broad git mutations.** The app only performs targeted git operations: committing `review.jsonl` (Cmd+S) and checking out branches (Cmd+B). No push, merge, rebase, or destructive operations.
+- **Broad git mutations.** The app only performs targeted git operations: committing `review.jsonl` (Cmd+S), checking out branches (Cmd+B), and pulling (Cmd+P / command palette). No push, merge, rebase, or destructive operations.
 - **Uncommitted changes.** Only committed refs are diffable. Working tree and staged changes are not shown.
 - **Syntax highlighting.** Diff coloring only, no language-aware highlighting.
 - **Commit history.** No log view, no branch graph, no timeline.

@@ -93,6 +93,18 @@ struct GitService: Sendable {
         return try runGit(["commit", "-m", message])
     }
 
+    func pull() throws {
+        _ = try runGit(["pull"])
+    }
+
+    func fetchAndUpdateBranch(_ branch: String) throws {
+        _ = try runGit(["fetch", "--all", "--quiet"])
+        // Update local branch to match its upstream without checking it out.
+        let upstream = try runGit(["rev-parse", "--abbrev-ref", "\(branch)@{upstream}"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = try runGit(["update-ref", "refs/heads/\(branch)", upstream])
+    }
+
     func checkout(_ branch: String) throws {
         _ = try runGit(["checkout", branch])
     }
