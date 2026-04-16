@@ -178,15 +178,39 @@ final class AppModel {
         case .local, .worktree:
             branchName = compare.name
         case .pullRequest:
-            alertMessage = "Cannot check out PR/MR refs directly."
-            return
+            if compare.name.hasPrefix("refs/merge-requests/") {
+                // "refs/merge-requests/origin/123" -> "mr-123"
+                let stripped = compare.name.replacingOccurrences(of: "refs/merge-requests/", with: "")
+                let parts = stripped.split(separator: "/")
+                let number = parts.count == 2 ? String(parts[1]) : stripped
+                branchName = "mr-\(number)"
+            } else {
+                // "refs/pull/origin/311" -> "pr-311"
+                let stripped = compare.name
+                    .replacingOccurrences(of: "refs/pull/", with: "")
+                    .replacingOccurrences(of: "/head", with: "")
+                let parts = stripped.split(separator: "/")
+                let number = parts.last.map(String.init) ?? stripped
+                branchName = "pr-\(number)"
+            }
         }
+
+        let isPR = compare.type == .pullRequest
+        let refName = compare.name
 
         startLoading()
         Task.detached {
             let git = GitService(repoPath: repoPath)
             do {
-                try git.checkout(branchName)
+                if isPR {
+                    do {
+                        try git.checkoutNewBranch(branchName, from: refName)
+                    } catch {
+                        try git.checkout(branchName)
+                    }
+                } else {
+                    try git.checkout(branchName)
+                }
                 let branch = try? git.currentBranch()
                 await MainActor.run {
                     self.stopLoading()

@@ -109,6 +109,10 @@ struct GitService: Sendable {
         _ = try runGit(["checkout", branch])
     }
 
+    func checkoutNewBranch(_ name: String, from ref: String) throws {
+        _ = try runGit(["checkout", "-b", name, ref])
+    }
+
     func currentBranch() throws -> String {
         let output = try runGit(["rev-parse", "--abbrev-ref", "HEAD"])
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
