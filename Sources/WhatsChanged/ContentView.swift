@@ -13,6 +13,10 @@ struct OpenCommandPaletteKey: FocusedValueKey {
     typealias Value = Binding<Bool>
 }
 
+struct OpenFilePickerKey: FocusedValueKey {
+    typealias Value = Binding<Bool>
+}
+
 extension FocusedValues {
     var openBasePicker: Binding<Bool>? {
         get { self[OpenBasePickerKey.self] }
@@ -26,6 +30,10 @@ extension FocusedValues {
         get { self[OpenCommandPaletteKey.self] }
         set { self[OpenCommandPaletteKey.self] = newValue }
     }
+    var openFilePicker: Binding<Bool>? {
+        get { self[OpenFilePickerKey.self] }
+        set { self[OpenFilePickerKey.self] = newValue }
+    }
 }
 
 struct ContentView: View {
@@ -33,6 +41,8 @@ struct ContentView: View {
     @State private var basePickerOpen = false
     @State private var comparePickerOpen = false
     @State private var commandPaletteOpen = false
+    @State private var filePickerOpen = false
+    @State private var scrollToFileID: UUID?
 
     var body: some View {
         @Bindable var model = model
@@ -59,16 +69,26 @@ struct ContentView: View {
                             description: Text("Pick a ref on the right to see changes.")
                         )
                     } else {
-                        DiffView(fileDiffs: model.fileDiffs)
+                        DiffView(fileDiffs: model.fileDiffs, scrollToFileID: $scrollToFileID)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .sheet(isPresented: $filePickerOpen) {
+                FilePickerView(
+                    isPresented: $filePickerOpen,
+                    fileDiffs: model.fileDiffs,
+                    onSelect: { id in
+                        scrollToFileID = id
+                    }
+                )
             }
             .sheet(isPresented: $commandPaletteOpen) {
                 CommandPaletteView(
                     isPresented: $commandPaletteOpen,
                     openBasePicker: $basePickerOpen,
                     openComparePicker: $comparePickerOpen,
+                    openFilePicker: $filePickerOpen,
                     openRepo: openRepo
                 )
                 .environment(model)
@@ -79,6 +99,7 @@ struct ContentView: View {
             .focusedSceneValue(\.openBasePicker, $basePickerOpen)
             .focusedSceneValue(\.openComparePicker, $comparePickerOpen)
             .focusedSceneValue(\.openCommandPalette, $commandPaletteOpen)
+            .focusedSceneValue(\.openFilePicker, $filePickerOpen)
             .navigationTitle("What's Changed in \(URL(fileURLWithPath: model.repoPath!).lastPathComponent)?")
             .alert("Error", isPresented: Binding(get: { model.alertMessage != nil }, set: { if !$0 { model.alertMessage = nil } })) {
                 Button("OK") { model.alertMessage = nil }

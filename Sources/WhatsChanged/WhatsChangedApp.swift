@@ -7,6 +7,7 @@ struct WhatsChangedApp: App {
     @FocusedValue(\.openBasePicker) private var openBasePicker
     @FocusedValue(\.openComparePicker) private var openComparePicker
     @FocusedValue(\.openCommandPalette) private var openCommandPalette
+    @FocusedValue(\.openFilePicker) private var openFilePicker
 
     var body: some Scene {
         WindowGroup {
@@ -90,6 +91,11 @@ Button("Refresh") {
                     openComparePicker?.wrappedValue = true
                 }
                 .keyboardShortcut("l", modifiers: .command)
+
+                Button("Jump to File") {
+                    openFilePicker?.wrappedValue = true
+                }
+                .keyboardShortcut("j", modifiers: .command)
 
                 Button("Command Palette") {
                     openCommandPalette?.wrappedValue = true

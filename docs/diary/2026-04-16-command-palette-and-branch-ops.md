@@ -131,3 +131,45 @@ The remote extraction from ref names (`refs/pull/origin/311` -> remote `origin`,
 ### Future work
 - Consider detecting whether `gh`/`glab` are installed and showing a more helpful error message.
 - The push command could show a success confirmation instead of silently succeeding.
+
+## Step 4: Jump to file, two-phase loading, and polish
+
+### Prompt Context
+
+**Verbatim prompt:** "Now I want a feature to jump to a specific file."
+**Interpretation:** Add file navigation for large diffs.
+**Inferred intent:** Solve the open question about file navigation — scrolling through many files linearly is slow.
+
+### What I did
+- Created `/Sources/WhatsChanged/FilePickerView.swift` — a sheet similar to the command palette but listing changed files with +/- counts.
+- Added `scrollToFileID` binding to `DiffView`, wrapped the `ScrollView` in a `ScrollViewReader`, and added `.id(file.id)` to file headers.
+- Added a flash animation on the file header when jumped to: the pink background brightens to 0.5 opacity for 0.6s then fades back.
+- Added Cmd+J shortcut and "Jump to File" in the command palette.
+- Split `getRefs` in GitService: extracted `fetchRemotes()` so `loadRefs` can show local refs immediately, then fetch and update in the background.
+- Added compare ref defaulting to the current branch (if different from base).
+- Added diff refresh after committing review comments.
+- Added `openFilePicker` focused value and binding threaded through to command palette.
+
+### Why
+File navigation was listed as an open question in the spec. Jump-to-file with filtering is faster than scrolling, especially for diffs spanning 20+ files. Two-phase loading makes the app feel instant on startup. Compare ref defaulting saves a click in the common case.
+
+### What worked
+- `ScrollViewReader` + `.id()` on file headers works reliably for programmatic scrolling.
+- The flash animation using `DispatchQueue.main.asyncAfter` for the fade-out delay is simple and effective.
+- The `FilePickerView` reuses the same interaction patterns as the command palette (sheet, search, arrow keys, Enter, Escape) so it feels consistent.
+
+### What didn't work
+Nothing — these were straightforward additions building on patterns already established.
+
+### What I learned
+The `FileDiff` already had stable UUIDs (unlike `PaletteCommand` which caused issues earlier), so the file picker filtering worked immediately without identity issues.
+
+### What was tricky
+Threading the `scrollToFileID` binding from `ContentView` through to `DiffView` and coordinating the uncollapse + scroll + flash sequence. The uncollapse must happen before the scroll, and the flash must start after the scroll animation.
+
+### What warrants review
+- The flash uses `DispatchQueue.main.asyncAfter` which is fire-and-forget. If the user jumps to another file before the fade completes, both animations run independently. This is harmless but could look slightly odd.
+- The `FilePickerView` receives `fileDiffs` as a `let` parameter. Unlike the command palette (which had re-render issues), this works because `fileDiffs` is stable while the sheet is open — the diff doesn't change mid-review.
+
+### Future work
+- None immediately. The open question about file navigation in the spec has been resolved.

@@ -41,12 +41,12 @@ final class AppModel {
         Task.detached {
             let git = GitService(repoPath: repoPath)
             do {
+                // Show local refs immediately.
                 let refs = try git.getRefs()
                 let primary = try git.primaryBranch()
                 let root = try git.findRepoRoot()
                 let branch = try? git.currentBranch()
                 await MainActor.run {
-                    self.stopLoading()
                     self.refs = refs
                     self.primaryBranchName = primary
                     self.repoRoot = root
@@ -54,8 +54,19 @@ final class AppModel {
                     if self.baseRef == nil {
                         self.baseRef = refs.first { $0.name == primary }
                     }
+                    if self.compareRef == nil, let branch, branch != primary {
+                        self.compareRef = refs.first { $0.name == branch }
+                    }
                     self.loadReviewComments()
                     self.loadDiff()
+                }
+
+                // Fetch remotes in the background, then update refs.
+                git.fetchRemotes()
+                let updatedRefs = try git.getRefs()
+                await MainActor.run {
+                    self.stopLoading()
+                    self.refs = updatedRefs
                 }
             } catch {
                 await MainActor.run {
@@ -156,6 +167,9 @@ final class AppModel {
                     return
                 }
                 try git.commitFile("review.jsonl", message: message)
+                await MainActor.run {
+                    self.loadDiff()
+                }
             } catch {
                 await MainActor.run {
                     self.error = error.localizedDescription

@@ -8,6 +8,19 @@ struct GitService: Sendable {
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    func fetchRemotes() {
+        // Fetch all remotes and PR refs (best-effort).
+        _ = try? runGit(["fetch", "--all", "--quiet"])
+        // GitHub/GitLab PR refs aren't covered by the default refspec, fetch them separately per remote.
+        let remotesOutput = (try? runGit(["remote"])) ?? ""
+        for remote in remotesOutput.components(separatedBy: "\n") {
+            let name = remote.trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { continue }
+            _ = try? runGit(["fetch", name, "+refs/pull/*/head:refs/pull/\(name)/*", "--quiet"])
+            _ = try? runGit(["fetch", name, "+refs/merge-requests/*/head:refs/merge-requests/\(name)/*", "--quiet"])
+        }
+    }
+
     func getRefs() throws -> [GitRef] {
         var refs: [GitRef] = []
         var worktreeBranches: Set<String> = []
@@ -25,17 +38,6 @@ struct GitService: Sendable {
                     worktreeBranches.insert(branch)
                 }
             }
-        }
-
-        // Fetch all remotes and PR refs (best-effort).
-        _ = try? runGit(["fetch", "--all", "--quiet"])
-        // GitHub/GitLab PR refs aren't covered by the default refspec, fetch them separately per remote.
-        let remotesOutput = (try? runGit(["remote"])) ?? ""
-        for remote in remotesOutput.components(separatedBy: "\n") {
-            let name = remote.trimmingCharacters(in: .whitespaces)
-            guard !name.isEmpty else { continue }
-            _ = try? runGit(["fetch", name, "+refs/pull/*/head:refs/pull/\(name)/*", "--quiet"])
-            _ = try? runGit(["fetch", name, "+refs/merge-requests/*/head:refs/merge-requests/\(name)/*", "--quiet"])
         }
 
         // All refs sorted by committer date (newest first).

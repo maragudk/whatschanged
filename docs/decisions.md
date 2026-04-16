@@ -19,6 +19,18 @@ Tradeoffs: This approach has no built-in threading, resolution status, or notifi
 
 Review comments store the resolved commit SHAs rather than symbolic ref names (branch names). Ref names are mutable -- a branch can point to a different commit after a force push or new commit. SHAs are immutable and uniquely identify the exact code that was reviewed, regardless of how branches have moved since.
 
+## 2026-04-16: Use gh/glab CLI for PR/MR checkout instead of manual branch creation
+
+Initially created local branches like `pr-311` from PR refs using `git checkout -b pr-311 refs/pull/origin/311`. This worked for viewing code but pushing didn't update the PR — it created a new `pr-311` branch on the remote instead. The PR ref is a read-only reference, not connected to the PR's source branch.
+
+Switched to `gh pr checkout` (GitHub) and `glab mr checkout` (GitLab), which check out the PR's actual source branch with proper upstream tracking. This adds external tool dependencies but correctly handles the push-updates-the-PR workflow, including forks.
+
+## 2026-04-16: Two-phase ref loading for instant startup
+
+On startup, the app now shows local refs and the diff immediately (no network), then fetches remotes in the background and updates the ref list when done. Previously, the entire `getRefs` call blocked on `git fetch --all` before showing anything.
+
+This means the initial view may be missing new remote branches or PRs, but the diff for local branches appears instantly. The tradeoff favors perceived performance since the user typically wants to see their current branch's diff right away.
+
 ## 2026-04-16: Shift+click for multi-line comment ranges instead of drag selection
 
 Needed a way to comment on ranges of lines, not just single lines. Drag gestures in SwiftUI conflict with ScrollView scrolling inside a LazyVStack, and coordinating drag state across independent row views is complex. Shift+click (click to set anchor, shift+click to set range end) is a well-understood interaction pattern that's straightforward to implement with shared state via an observable anchor object.

@@ -19,8 +19,10 @@ private final class CommentAnchor {
 struct DiffView: View {
     @Environment(AppModel.self) private var model
     let fileDiffs: [FileDiff]
+    @Binding var scrollToFileID: UUID?
     @State private var collapsedFiles: Set<String> = []
     @State private var anchor = CommentAnchor()
+    @State private var highlightedFileID: UUID?
 
     var body: some View {
         if fileDiffs.isEmpty {
@@ -30,10 +32,12 @@ struct DiffView: View {
                 description: Text("The selected refs are identical.")
             )
         } else {
-            ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(fileDiffs) { file in
-                        FileHeaderView(file: file, collapsedFiles: $collapsedFiles)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(fileDiffs) { file in
+                            FileHeaderView(file: file, collapsedFiles: $collapsedFiles, isHighlighted: highlightedFileID == file.id)
+                                .id(file.id)
 
                         if !collapsedFiles.contains(file.displayPath) {
                             if file.isBinary {
@@ -59,11 +63,33 @@ struct DiffView: View {
                         }
                     }
                 }
-                .overlay(alignment: .center) {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .frame(width: 1)
-                        .frame(maxHeight: .infinity)
+                    .overlay(alignment: .center) {
+                        Rectangle()
+                            .fill(.quaternary)
+                            .frame(width: 1)
+                            .frame(maxHeight: .infinity)
+                    }
+                }
+                .onChange(of: scrollToFileID) {
+                    if let id = scrollToFileID {
+                        // Uncollapse the file if needed.
+                        if let file = fileDiffs.first(where: { $0.id == id }) {
+                            collapsedFiles.remove(file.displayPath)
+                        }
+                        withAnimation {
+                            proxy.scrollTo(id, anchor: .top)
+                        }
+                        scrollToFileID = nil
+                        // Flash the file header.
+                        withAnimation(.easeIn(duration: 0.15)) {
+                            highlightedFileID = id
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            withAnimation(.easeOut(duration: 0.4)) {
+                                highlightedFileID = nil
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -73,6 +99,7 @@ struct DiffView: View {
 private struct FileHeaderView: View {
     let file: FileDiff
     @Binding var collapsedFiles: Set<String>
+    var isHighlighted: Bool = false
 
     private var isCollapsed: Bool {
         collapsedFiles.contains(file.displayPath)
@@ -113,7 +140,7 @@ private struct FileHeaderView: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(red: 0.95, green: 0.3, blue: 0.5).opacity(0.2))
+        .background(isHighlighted ? Color(red: 0.95, green: 0.3, blue: 0.5).opacity(0.5) : Color(red: 0.95, green: 0.3, blue: 0.5).opacity(0.2))
         .contentShape(Rectangle())
         .pointerStyle(.link)
     }

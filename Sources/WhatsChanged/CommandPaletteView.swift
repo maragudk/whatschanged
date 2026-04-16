@@ -13,6 +13,7 @@ struct CommandPaletteView: View {
     @Binding var isPresented: Bool
     @Binding var openBasePicker: Bool
     @Binding var openComparePicker: Bool
+    @Binding var openFilePicker: Bool
     let openRepo: () -> Void
 
     @State private var searchText = ""
@@ -33,6 +34,9 @@ struct CommandPaletteView: View {
             PaletteCommand(id: "checkout", name: "Check Out Compare Branch", shortcut: "Cmd+B", isEnabled: model.compareRef != nil) {
                 model.checkoutCompareRef()
             },
+            PaletteCommand(id: "push", name: "Push Current Branch", shortcut: nil, isEnabled: model.repoPath != nil) {
+                model.pushCurrentBranch()
+            },
             PaletteCommand(id: "pull-current", name: "Pull Current Branch", shortcut: "Cmd+P", isEnabled: model.repoPath != nil) {
                 model.pullCurrentBranch()
             },
@@ -41,6 +45,9 @@ struct CommandPaletteView: View {
             },
             PaletteCommand(id: "commit-review", name: "Commit Review Comments", shortcut: "Cmd+S", isEnabled: model.repoRoot != nil) {
                 model.commitReviewComments()
+            },
+            PaletteCommand(id: "jump-file", name: "Jump to File", shortcut: "Cmd+J", isEnabled: !model.fileDiffs.isEmpty) {
+                openFilePicker = true
             },
             PaletteCommand(id: "refresh", name: "Refresh", shortcut: "Cmd+R", isEnabled: model.repoPath != nil) {
                 model.loadRefs()

@@ -22,7 +22,7 @@ A single user type: a developer who uses AI coding agents that create branches a
 - Dropdowns list all local branches, remote-tracking branches, worktree-associated branches, GitHub PR refs, and GitLab MR refs -- all sorted by commit date, newest first.
 - Each ref shows its name and the first line of its latest commit message.
 - Typing while a dropdown is open filters the list by substring match. Arrow keys navigate, Enter selects, Escape closes.
-- Base ref defaults to the repository's primary branch (main or master).
+- Base ref defaults to the repository's primary branch (main or master). Compare ref defaults to the current branch (if it differs from the base).
 
 ### Diff view
 
@@ -49,15 +49,22 @@ A single user type: a developer who uses AI coding agents that create branches a
 - Lines with existing comments show a blue vertical bar in the gutter. For multi-line comments, the bars merge into a continuous stripe.
 - Clicking a commented line's number opens the same popover pre-filled, allowing editing (Cmd+Enter to save) or deletion.
 - `review.jsonl` is loaded on app start and on refresh. Comments are matched to lines in the current diff by file path, line number, and SHA.
-- Cmd+S commits `review.jsonl` to git (including deletions when all comments have been removed). Committing is refused on main/master with an alert dialog.
+- Cmd+S commits `review.jsonl` to git (including deletions when all comments have been removed) and refreshes the diff. Committing is refused on main/master with an alert dialog.
 - The file is intended to be committed to git. An external agent reads and removes comments as it addresses them; when the file is empty, the agent deletes it.
 
 ### Branch operations
 
 - Cmd+B checks out the compare ref as a local branch. For remote branches (e.g. `origin/feature-x`), the remote prefix is stripped and a local tracking branch is created. PR refs are checked out via `gh pr checkout`, MR refs via `glab mr checkout` -- both set up proper upstream tracking so pushing updates the PR/MR directly.
 - Cmd+P pulls the current branch from its configured upstream.
+- Push current branch: pushes to the configured upstream. Available via command palette (no keyboard shortcut).
 - Pull default branch: fetches all remotes and fast-forwards the default branch (main/master) to its upstream without checking it out. Available via command palette (no keyboard shortcut).
 - The current branch name is displayed in the toolbar between the ref pickers and the loading spinner.
+
+### Jump to file
+
+- Cmd+J opens a file picker as a modal sheet listing all changed files with +/- line counts.
+- Typing filters the list by file path. Arrow keys navigate, Enter jumps to the file, Escape closes.
+- Selecting a file scrolls the diff to that file's header, uncollapses it if needed, and briefly flashes the header to draw attention.
 
 ### Command palette
 
@@ -69,13 +76,13 @@ A single user type: a developer who uses AI coding agents that create branches a
 
 ### Freshness
 
-- The ref list and current diff refresh on demand via Cmd+R.
-- Refresh fetches all remotes (`git fetch --all`), plus PR/MR refs from each remote.
+- On startup, local refs and the diff are shown immediately without waiting for a network fetch. Remote refs, PRs, and MRs appear once the background fetch completes.
+- The ref list and current diff refresh on demand via Cmd+R, which triggers a full fetch.
 - A spinner appears in the toolbar while refs or diffs are loading.
 
 ## Non-goals
 
-- **Broad git mutations.** The app only performs targeted git operations: committing `review.jsonl` (Cmd+S), checking out branches (Cmd+B), and pulling (Cmd+P / command palette). No push, merge, rebase, or destructive operations.
+- **Broad git mutations.** The app only performs targeted git operations: committing `review.jsonl` (Cmd+S), checking out branches (Cmd+B), pulling (Cmd+P / command palette), and pushing (command palette). No merge, rebase, or destructive operations.
 - **Uncommitted changes.** Only committed refs are diffable. Working tree and staged changes are not shown.
 - **Syntax highlighting.** Diff coloring only, no language-aware highlighting.
 - **Commit history.** No log view, no branch graph, no timeline.
@@ -85,9 +92,10 @@ A single user type: a developer who uses AI coding agents that create branches a
 ## Constraints
 
 - macOS 26 (Tahoe) minimum deployment target.
-- Pure Swift and SwiftUI. No external dependencies.
+- Pure Swift and SwiftUI. No bundled dependencies.
 - Swift Package Manager project -- no Xcode project file. Must build with `swift build`.
 - Shells out to the system `git` binary. No libgit2 or other git library.
+- PR checkout requires `gh` (GitHub CLI); MR checkout requires `glab` (GitLab CLI). Both must be installed on the system.
 
 ## Success criteria
 
@@ -98,6 +106,5 @@ A single user type: a developer who uses AI coding agents that create branches a
 ## Open questions
 
 - **First-collapse latency on large files.** Collapsing a file with 700+ changed lines takes ~1s the first time due to SwiftUI measuring variable-height rows. Subsequent collapses are instant. An NSTableView-based approach or Canvas rendering could eliminate this.
-- **File navigation for large diffs.** When a diff spans many files, scrolling through all of them linearly may be slow. A file list sidebar or jump-to-file feature might be needed.
 - **Cancellation of in-flight diffs.** If the user changes ref selection while a large diff is loading, the old request isn't cancelled. Could lead to stale results briefly appearing.
 - **Standalone binary.** The app only launches correctly via `swift run`, not as a standalone binary. This appears to be a macOS window server issue with bare SwiftUI executables. Currently worked around with a shell wrapper script.
