@@ -59,6 +59,14 @@ A single user type: a developer who uses AI coding agents that create branches a
 - Pull default branch: fetches all remotes and fast-forwards the default branch (main/master) to its upstream without checking it out. Available via command palette (no keyboard shortcut).
 - The current branch name is displayed in the toolbar between the ref pickers and the loading spinner.
 
+### Command palette
+
+- Cmd+Shift+P opens a command palette as a modal sheet with a search field and a list of all available commands.
+- Typing filters the list by substring match (case-insensitive). Arrow keys navigate, Enter executes, Escape closes.
+- Each command shows its keyboard shortcut (if it has one) on the right side.
+- Disabled commands (e.g. when no repo is open) appear greyed out and cannot be selected.
+- Clicking a command executes it and closes the palette.
+
 ### Freshness
 
 - The ref list and current diff refresh on demand via Cmd+R.

@@ -9,6 +9,10 @@ struct OpenComparePickerKey: FocusedValueKey {
     typealias Value = Binding<Bool>
 }
 
+struct OpenCommandPaletteKey: FocusedValueKey {
+    typealias Value = Binding<Bool>
+}
+
 extension FocusedValues {
     var openBasePicker: Binding<Bool>? {
         get { self[OpenBasePickerKey.self] }
@@ -18,12 +22,17 @@ extension FocusedValues {
         get { self[OpenComparePickerKey.self] }
         set { self[OpenComparePickerKey.self] = newValue }
     }
+    var openCommandPalette: Binding<Bool>? {
+        get { self[OpenCommandPaletteKey.self] }
+        set { self[OpenCommandPaletteKey.self] = newValue }
+    }
 }
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @State private var basePickerOpen = false
     @State private var comparePickerOpen = false
+    @State private var commandPaletteOpen = false
 
     var body: some View {
         @Bindable var model = model
@@ -55,11 +64,21 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .sheet(isPresented: $commandPaletteOpen) {
+                CommandPaletteView(
+                    isPresented: $commandPaletteOpen,
+                    openBasePicker: $basePickerOpen,
+                    openComparePicker: $comparePickerOpen,
+                    openRepo: openRepo
+                )
+                .environment(model)
+            }
             .onAppear {
                 model.loadRefs()
             }
             .focusedSceneValue(\.openBasePicker, $basePickerOpen)
             .focusedSceneValue(\.openComparePicker, $comparePickerOpen)
+            .focusedSceneValue(\.openCommandPalette, $commandPaletteOpen)
             .navigationTitle("What's Changed in \(URL(fileURLWithPath: model.repoPath!).lastPathComponent)?")
             .alert("Error", isPresented: Binding(get: { model.alertMessage != nil }, set: { if !$0 { model.alertMessage = nil } })) {
                 Button("OK") { model.alertMessage = nil }

@@ -6,6 +6,7 @@ struct WhatsChangedApp: App {
     @State private var model = AppModel()
     @FocusedValue(\.openBasePicker) private var openBasePicker
     @FocusedValue(\.openComparePicker) private var openComparePicker
+    @FocusedValue(\.openCommandPalette) private var openCommandPalette
 
     var body: some Scene {
         WindowGroup {
@@ -89,6 +90,11 @@ Button("Refresh") {
                     openComparePicker?.wrappedValue = true
                 }
                 .keyboardShortcut("l", modifiers: .command)
+
+                Button("Command Palette") {
+                    openCommandPalette?.wrappedValue = true
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
             }
         }
     }
