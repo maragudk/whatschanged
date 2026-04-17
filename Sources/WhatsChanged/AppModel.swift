@@ -107,6 +107,8 @@ final class AppModel {
                     self.stopLoading()
                     self.error = error.localizedDescription
                     self.fileDiffs = []
+                    self.baseSHA = nil
+                    self.compareSHA = nil
                 }
             }
         }
@@ -133,40 +135,53 @@ final class AppModel {
         guard let repoRoot, let baseSHA, let compareSHA else { return }
         let service = ReviewService(repoPath: repoRoot)
         let reviewComment = ReviewComment(file: file, startLine: startLine, endLine: endLine, comment: comment, base: baseSHA, compare: compareSHA)
-        try? service.append(reviewComment)
-        reviewComments.append(reviewComment)
+        do {
+            try service.append(reviewComment)
+            reviewComments.append(reviewComment)
+        } catch {
+            alertMessage = "Failed to save review comment: \(error.localizedDescription)"
+        }
     }
 
     func updateReviewComment(_ reviewComment: ReviewComment) {
         guard let repoRoot else { return }
         let service = ReviewService(repoPath: repoRoot)
-        try? service.update(reviewComment)
-        if let index = reviewComments.firstIndex(where: { $0.id == reviewComment.id }) {
-            reviewComments[index] = reviewComment
+        do {
+            try service.update(reviewComment)
+            if let index = reviewComments.firstIndex(where: { $0.id == reviewComment.id }) {
+                reviewComments[index] = reviewComment
+            }
+        } catch {
+            alertMessage = "Failed to update review comment: \(error.localizedDescription)"
         }
     }
 
     func deleteReviewComment(_ reviewComment: ReviewComment) {
         guard let repoRoot else { return }
         let service = ReviewService(repoPath: repoRoot)
-        try? service.delete(reviewComment)
-        reviewComments.removeAll { $0.id == reviewComment.id }
+        do {
+            try service.delete(reviewComment)
+            reviewComments.removeAll { $0.id == reviewComment.id }
+        } catch {
+            alertMessage = "Failed to delete review comment: \(error.localizedDescription)"
+        }
     }
 
     func commitReviewComments() {
         guard let repoRoot else { return }
         let message = reviewComments.isEmpty ? "Remove review comments" : "Update review comments"
+        let primary = primaryBranchName
         Task.detached {
             let git = GitService(repoPath: repoRoot)
             do {
                 let branch = try git.currentBranch()
-                if branch == "main" || branch == "master" {
+                if branch == primary {
                     await MainActor.run {
                         self.alertMessage = "Cannot commit review comments on \(branch). Switch to a feature branch first."
                     }
                     return
                 }
-                try git.commitFile("review.jsonl", message: message)
+                try git.commitReviewFile("review.jsonl", message: message)
                 await MainActor.run {
                     self.loadDiff()
                 }

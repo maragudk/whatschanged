@@ -65,13 +65,13 @@ struct WhatsChangedApp: App {
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(model.repoRoot == nil)
 
-Button("Pull Current Branch") {
+                Button("Pull Current Branch") {
                     model.pullCurrentBranch()
                 }
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(model.repoPath == nil)
 
-Button("Refresh") {
+                Button("Refresh") {
                     model.loadRefs()
                 }
                 .keyboardShortcut("r", modifiers: .command)
