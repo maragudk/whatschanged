@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @Observable
@@ -206,7 +207,8 @@ private struct SideBySideRowView: View {
                             endLine: popoverEndLine,
                             existingComment: existingComment,
                             onSave: { text in
-                                if let existing = existingComment {
+                                if let existing = model.reviewComment(forFile: filePath, line: popoverStartLine) {
+                                    guard existing.comment != text else { return }
                                     var updated = existing
                                     updated.comment = text
                                     model.updateReviewComment(updated)
@@ -311,6 +313,8 @@ private struct CommentPopoverView: View {
     let onSave: (String) -> Void
     let onDelete: () -> Void
 
+    @State private var didFinish = false
+
     private var lineLabel: String {
         if startLine <= 0 && endLine <= 0 {
             return ""
@@ -333,13 +337,14 @@ private struct CommentPopoverView: View {
 
             TextEditor(text: $commentText)
                 .font(AppFont.body)
-                .frame(minWidth: 300, minHeight: 60)
+                .frame(minWidth: 500, minHeight: 220)
                 .scrollContentBackground(.hidden)
 
             HStack {
                 if existingComment != nil {
                     Button("Delete") {
                         onDelete()
+                        didFinish = true
                         isPresented = false
                     }
                     .foregroundStyle(.red)
@@ -347,27 +352,32 @@ private struct CommentPopoverView: View {
 
                 Spacer()
 
-                Text("Cmd+Enter to save")
+                Text("Auto-saves · Esc to cancel")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
-
-                Button("Save") {
-                    save()
-                }
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding()
         .onExitCommand {
+            didFinish = true
             isPresented = false
+        }
+        .onDisappear {
+            if !didFinish {
+                saveIfChanged()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
+            if !didFinish {
+                saveIfChanged()
+            }
         }
     }
 
-    private func save() {
+    private func saveIfChanged() {
         let trimmed = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         onSave(trimmed)
-        isPresented = false
     }
 }
+
